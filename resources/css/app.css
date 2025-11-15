@@ -1,0 +1,162 @@
+:root {
+  --primary: #afafaf;
+  --accent: #cbceea;
+  --bg: #ffffff;
+  --text-dark: #000000;
+  --text-light: #666666;
+  --border: #e0e0e0;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  font-family: "Unbounded", sans-serif;
+  background-color: var(--bg);
+  color: var(--text-dark);
+  line-height: 1.6;
+}
+
+/* Typography */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: "Unbounded", sans-serif;
+  font-weight: 600;
+}
+
+p {
+  margin: 0;
+}
+
+/* Buttons */
+.btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: "Unbounded", sans-serif;
+  font-size: 14px;
+  transition: all 0.3s;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--text-dark);
+}
+
+.btn-primary:hover {
+  opacity: 0.9;
+}
+
+.btn-secondary {
+  background: transparent;
+  color: white;
+  border: 2px solid white;
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Inputs */
+input,
+select,
+textarea {
+  font-family: "Unbounded", sans-serif;
+  font-size: 14px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(203, 206, 234, 0.2);
+}
+
+/* Grid utilities */
+.grid {
+  display: grid;
+}
+
+.grid-auto {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+/* Flexbox utilities */
+.flex {
+  display: flex;
+}
+
+.flex-col {
+  flex-direction: column;
+}
+
+.gap-4 {
+  gap: 1rem;
+}
+
+.gap-6 {
+  gap: 1.5rem;
+}
+
+/* Spacing */
+.p-4 {
+  padding: 1rem;
+}
+
+.p-6 {
+  padding: 1.5rem;
+}
+
+.mb-4 {
+  margin-bottom: 1rem;
+}
+
+.mb-6 {
+  margin-bottom: 1.5rem;
+}
+
+/* Utility classes */
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.text-muted {
+  color: var(--text-light);
+}
+
+.rounded {
+  border-radius: 8px;
+}
+
+.border {
+  border: 1px solid var(--border);
+}
+
+.shadow {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .grid-auto {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  }
+}
