@@ -355,20 +355,49 @@ export default {
   this.loading = true
 
   try {
-    // Сбрасываем и получаем новый CSRF токен
-    csrfToken = null
-    await axios.get('/sanctum/csrf-cookie')
-    
     const formData = new FormData()
     
-    // Добавляем поля...
+    // Добавляем обязательные поля
     formData.append('name', this.form.name || '')
     formData.append('address', this.form.address || '')
     formData.append('price_per_night', this.form.price_per_night || 0)
     formData.append('rooms', this.form.rooms || 1)
     formData.append('total_area', this.form.total_area || 0)
     formData.append('max_guests', this.form.max_guests || 1)
-    // ... остальные поля
+    
+    // Добавляем остальные поля
+    formData.append('kitchen_area', this.form.kitchen_area || 0)
+    formData.append('living_area', this.form.living_area || 0)
+    formData.append('floor', this.form.floor || 0)
+    formData.append('balcony', this.form.balcony || 'none')
+    formData.append('bathroom', this.form.bathroom || 'shared')
+    formData.append('renovation', this.form.renovation || '')
+    formData.append('deposit', this.form.deposit || 0)
+    formData.append('commission', this.form.commission || 0)
+    formData.append('other_utilities', this.form.other_utilities || '')
+    formData.append('description', this.form.description || '')
+    formData.append('latitude', this.form.latitude || 55.7558)
+    formData.append('longitude', this.form.longitude || 37.6173)
+    
+    // Мебель и техника
+    formData.append('furniture', Array.isArray(this.form.furniture) ? this.form.furniture.join(', ') : (this.form.furniture || ''))
+    formData.append('appliances', Array.isArray(this.form.appliances) ? this.form.appliances.join(', ') : (this.form.appliances || ''))
+    
+    // Чекбоксы
+    formData.append('has_internet', this.form.has_internet ? '1' : '0')
+    formData.append('meter_based', this.form.meter_based ? '1' : '0')
+    formData.append('allows_children', this.form.allows_children ? '1' : '0')
+    formData.append('allows_pets', this.form.allows_pets ? '1' : '0')
+    formData.append('allows_smoking', this.form.allows_smoking ? '1' : '0')
+
+    console.log('=== FormData prepared ===')
+
+    // Изображения
+    this.form.images.forEach((img, idx) => {
+      if (img.file) {
+        formData.append(`images[${idx}]`, img.file)
+      }
+    })
 
     const url = this.isEdit 
       ? `/api/apartments/${this.apartmentId}`
@@ -381,31 +410,31 @@ export default {
     const response = await axios[method](url, formData, {
       headers: { 
         'Content-Type': 'multipart/form-data'
-      }
+      },
+      timeout: 30000 // 30 секунд таймаут
     })
 
-    console.log('Response:', response.data)
+    console.log('✅ Success response:', response.data)
 
     if (response.data.success) {
       alert(this.isEdit ? 'Апартаменты успешно обновлены' : 'Апартаменты успешно созданы')
       this.$router.push('/admin/apartments')
     }
   } catch (err) {
-    console.error('Full error:', err)
+    console.error('❌ Full error:', err)
     
-    if (err.response?.status === 401) {
-      alert('Ошибка авторизации. Пожалуйста, войдите заново.')
-      window.location.href = '/login?t=' + Date.now()
-    } else if (err.response?.data?.errors) {
-      // Обработка ошибок валидации
+    // НЕ обрабатываем 419 и 401 здесь - axios интерцептор уже это сделает
+    if (err.response?.data?.errors) {
       const errors = err.response.data.errors
       let errorMessage = 'Ошибки валидации:\n'
       Object.keys(errors).forEach(field => {
         errorMessage += `- ${field}: ${errors[field].join(', ')}\n`
       })
       alert(errorMessage)
-    } else {
-      alert('Ошибка: ' + (err.response?.data?.message || err.message))
+    } else if (err.response?.data?.message && err.response.status !== 419 && err.response.status !== 401) {
+      alert('Ошибка: ' + err.response.data.message)
+    } else if (err.code === 'ECONNABORTED') {
+      alert('Превышено время ожидания. Попробуйте еще раз.')
     }
   } finally {
     this.loading = false

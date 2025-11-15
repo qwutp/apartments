@@ -125,10 +125,6 @@ export default {
   try {
     console.log('🗑️ Deleting apartment:', id)
     
-    // Сбрасываем CSRF токен и получаем новый
-    csrfToken = null
-    await axios.get('/sanctum/csrf-cookie')
-    
     const response = await axios.delete(`/api/apartments/${id}`)
     
     console.log('✅ Delete response:', response.data)
@@ -143,12 +139,9 @@ export default {
   } catch (error) {
     console.error('❌ Delete error:', error)
     
-    if (error.response?.status === 401) {
-      alert('Ошибка авторизации. Пожалуйста, войдите заново.')
-      // Полная перезагрузка для очистки кэша
-      window.location.href = '/login?t=' + Date.now()
-    } else {
-      alert('Ошибка: ' + (error.response?.data?.message || error.message))
+    // НЕ обрабатываем 419/401 - axios интерцептор сделает это
+    if (error.response?.data?.message && error.response.status !== 419 && error.response.status !== 401) {
+      alert('Ошибка: ' + error.response.data.message)
     }
   }
 }

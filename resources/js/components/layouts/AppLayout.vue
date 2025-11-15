@@ -194,34 +194,20 @@ async forceAuthCheck() {
   console.log('🚪 Выход из аккаунта...')
   
   try {
-    // Очищаем все данные
+    // Очищаем данные
     this.authUser = null
-    localStorage.clear()
-    sessionStorage.clear()
-    csrfToken = null
-    
-    // Удаляем cookies
-    document.cookie.split(";").forEach(cookie => {
-      const name = cookie.split("=")[0].trim()
-      document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`
-    })
+    localStorage.removeItem('authUser')
     
     // Отправляем запрос на сервер
-    await fetch('/logout', {
-      method: 'POST',
-      headers: {
-        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
-        'Content-Type': 'application/json'
-      },
-      credentials: 'include'
-    })
+    await axios.post('/logout')
     
     // Перезагружаем страницу
-    window.location.href = window.location.origin + '?t=' + Date.now()
+    window.location.href = '/'
     
   } catch (error) {
     console.error('Logout error:', error)
-    window.location.href = window.location.origin + '?t=' + Date.now()
+    // Все равно перезагружаем
+    window.location.href = '/'
   }
 },
     
