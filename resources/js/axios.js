@@ -1,102 +1,85 @@
-// axios.js - УЛУЧШЕННАЯ ВЕРСИЯ
 import axios from 'axios'
 
 const instance = axios.create({
   baseURL: '/',
   withCredentials: true,
-  timeout: 30000, // 30 секунд таймаут
   headers: {
     'X-Requested-With': 'XMLHttpRequest',
-    'Accept': 'application/json'
+    'Accept': 'application/json',
+    'Content-Type': 'application/json'
   }
 })
 
-// Функция для гарантированного получения CSRF токена
-async function ensureCSRFToken() {
-  // Сначала проверяем meta тег
-  let token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-  if (token) {
-    return token
+// Глобальная переменная для CSRF токена
+let csrfToken = null
+
+// Функция для получения CSRF токена
+async function getCSRFToken() {
+  if (csrfToken) {
+    return csrfToken
   }
   
-  // Если нет в meta, получаем через cookie
   try {
-    // Используем обычный fetch чтобы избежать рекурсии
+    console.log('🛡️ Requesting CSRF token...')
     const response = await fetch('/sanctum/csrf-cookie', {
       method: 'GET',
-      credentials: 'include',
-      headers: {
-        'Accept': 'application/json'
-      }
+      credentials: 'include'
     })
     
-    // Пробуем получить из cookie
-    const cookies = document.cookie.split(';')
-    for (let cookie of cookies) {
-      const [name, value] = cookie.trim().split('=')
-      if (name === 'XSRF-TOKEN') {
-        token = decodeURIComponent(value)
-        return token
-      }
+    if (response.ok) {
+      csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+      console.log('🛡️ CSRF token received:', csrfToken ? 'YES' : 'NO')
+      return csrfToken
     }
-    
-    // Пробуем получить из meta тега после запроса
-    token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-    return token
   } catch (error) {
-    console.error('Failed to get CSRF token:', error)
-    return null
+    console.error('❌ Failed to get CSRF token:', error)
   }
+  
+  return null
 }
 
 instance.interceptors.request.use(async (config) => {
-  // Для всех модифицирующих запросов добавляем CSRF токен
-  if (['post', 'put', 'delete', 'patch'].includes(config.method?.toLowerCase())) {
-    // Если токен уже установлен в заголовках, не перезаписываем
-    if (!config.headers['X-CSRF-TOKEN']) {
-      const token = await ensureCSRFToken()
-      if (token) {
-        config.headers['X-CSRF-TOKEN'] = token
-      }
-    }
+  console.log(`🚀 ${config.method?.toUpperCase()} request to: ${config.url}`)
+  
+  // Для ВСЕХ запросов добавляем CSRF токен
+  const token = await getCSRFToken()
+  if (token) {
+    config.headers['X-CSRF-TOKEN'] = token
   }
+  
   return config
-}, (error) => {
-  return Promise.reject(error)
 })
 
 instance.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    // 401 - не авторизован, перенаправляем на логин
+  (response) => {
+    console.log('✅ Response received:', response.status)
+    return response
+  },
+  (error) => {
+    console.error('❌ Response error:', error.response?.status)
+    
     if (error.response?.status === 401) {
-      console.log('🔐 Unauthorized (401), redirecting to login')
+      console.log('🔐 Unauthorized - clearing auth data')
       localStorage.removeItem('authUser')
-      window.dispatchEvent(new CustomEvent('authStateChanged', { detail: { user: null } }))
-      // НЕ перенаправляем автоматически, пусть компонент сам решает
-      // window.location.href = '/login'
+      sessionStorage.clear()
+      
+      // Удаляем все cookies
+      document.cookie.split(";").forEach(cookie => {
+        const name = cookie.split("=")[0].trim()
+        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`
+      })
+      
+      alert('Сессия истекла. Пожалуйста, войдите заново.')
+      window.location.href = '/login'
     }
-    // 403 - доступ запрещен (может быть админ middleware)
-    if (error.response?.status === 403) {
-      console.log('🚫 Forbidden (403)')
-      // Не перенаправляем автоматически, просто возвращаем ошибку
-    }
-    // 419 - CSRF токен истек
+    
     if (error.response?.status === 419) {
-      console.log('🔄 CSRF token expired, getting new token...')
-      try {
-        await axios.get('/sanctum/csrf-cookie', { baseURL: '/' })
-        // Повторяем запрос с новым токеном
-        const config = error.config
-        const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-        if (token && config) {
-          config.headers['X-CSRF-TOKEN'] = token
-          return instance.request(config)
-        }
-      } catch (e) {
-        console.error('Failed to refresh CSRF token:', e)
-      }
+      console.log('🔄 CSRF token expired')
+      csrfToken = null // Сбрасываем токен
+      alert('Сессия истекла. Пожалуйста, попробуйте еще раз.')
+      window.location.reload()
     }
+    
     return Promise.reject(error)
   }
 )
