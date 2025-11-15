@@ -15,10 +15,9 @@
           <tr>
             <th>Название</th>
             <th>Адрес</th>
-            <th>Цена за ночь</th>
+            <th>Цена</th>
             <th>Статус</th>
-            <th>Комнат</th>
-            <th>Гостей</th>
+            <th>Арендатор</th>
             <th>Действия</th>
           </tr>
         </thead>
@@ -26,14 +25,13 @@
           <tr v-for="apartment in filteredApartments" :key="apartment.id">
             <td>{{ apartment.name }}</td>
             <td>{{ apartment.address }}</td>
-            <td>{{ apartment.price_per_night }} ₽</td>
+            <td>{{ formatPrice(apartment.price_per_night) }} Р/сут.</td>
             <td>
               <span :class="['status', apartment.status]">
                 {{ getStatusText(apartment.status) }}
               </span>
             </td>
-            <td>{{ apartment.rooms }}</td>
-            <td>{{ apartment.max_guests }}</td>
+            <td>{{ apartment.current_tenant || '-' }}</td>
             <td class="actions">
               <button @click="editApartment(apartment.id)" class="btn-icon">✏️</button>
               <button 
@@ -83,69 +81,144 @@ export default {
   mounted() {
     this.fetchApartments()
   },
-  methods: {
-    async fetchApartments() {
-      this.loading = true
-      try {
-        const response = await axios.get('/api/apartments')
-        this.apartments = response.data
-        console.log('Loaded apartments:', this.apartments)
-      } catch (error) {
-        console.error('Error fetching apartments:', error)
-        alert('Ошибка загрузки апартаментов')
-      } finally {
-        this.loading = false
-      }
-    },
-    
-    getStatusText(status) {
-      const statusMap = {
-        'available': 'Свободно',
-        'booked': 'Забронировано', 
-        'occupied': 'Занято'
-      }
-      return statusMap[status] || status
-    },
-    
-    goToCreate() {
-      console.log('➡️ Creating new apartment')
-      this.$router.push('/admin/apartment/create')
-    },
-  
-    editApartment(id) {
-      console.log('✏️ Editing apartment:', id)
-      this.$router.push(`/admin/apartment/edit/${id}`)
-    },
-    
-    async deleteApartment(id) {
-  if (!confirm('Вы уверены, что хотите удалить эти апартаменты?')) {
-    return
-  }
-
-  try {
-    console.log('🗑️ Deleting apartment:', id)
-    
-    const response = await axios.delete(`/api/apartments/${id}`)
-    
-    console.log('✅ Delete response:', response.data)
-    
-    if (response.data.success) {
-      this.fetchApartments()
-      alert('Апартаменты успешно удалены')
-    } else {
-      alert('Ошибка при удалении: ' + (response.data.message || 'Неизвестная ошибка'))
+ // AdminApartments.vue - ИСПРАВЛЕННЫЕ МЕТОДЫ
+methods: {
+  async fetchApartments() {
+    this.loading = true
+    try {
+      const response = await axios.get('/api/apartments')
+      this.apartments = response.data.map(apt => ({
+        ...apt,
+        current_tenant: apt.current_booking?.user 
+          ? `${apt.current_booking.user.last_name || ''} ${apt.current_booking.user.first_name || ''} ${apt.current_booking.user.patronymic || ''}`.trim()
+          : null
+      }))
+    } catch (error) {
+      console.error('Error fetching apartments:', error)
+    } finally {
+      this.loading = false
     }
-    
-  } catch (error) {
-    console.error('❌ Delete error:', error)
-    
-    // НЕ обрабатываем 419/401 - axios интерцептор сделает это
-    if (error.response?.data?.message && error.response.status !== 419 && error.response.status !== 401) {
-      alert('Ошибка: ' + error.response.data.message)
+  },
+  goToCreate() {
+    console.log('➡️ Creating new apartment')
+    try {
+      this.$router.push({ name: 'admin-apartment-create' }).catch(err => {
+        console.error('Router error:', err)
+        // Fallback на прямой путь
+        window.location.href = '/admin/apartment/create'
+      })
+    } catch (error) {
+      console.error('Navigation error:', error)
+      window.location.href = '/admin/apartment/create'
+    }
+  },
+  
+  editApartment(id) {
+    console.log('✏️ Editing apartment:', id)
+    try {
+      this.$router.push({ name: 'admin-apartment-edit', params: { id } }).catch(err => {
+        console.error('Router error:', err)
+        // Fallback на прямой путь
+        window.location.href = `/admin/apartment/edit/${id}`
+      })
+    } catch (error) {
+      console.error('Navigation error:', error)
+      window.location.href = `/admin/apartment/edit/${id}`
+    }
+  },
+  
+  formatPrice(price) {
+    if (!price) return '0'
+    return new Intl.NumberFormat('ru-RU').format(price)
+  },
+  
+  getStatusText(status) {
+    const statusMap = {
+      'available': 'Свободно',
+      'booked': 'Забронировано',
+      'occupied': 'Занято'
+    }
+    return statusMap[status] || status
+  },
+  
+  async deleteApartment(id) {
+    if (!confirm('Вы уверены, что хотите удалить эти апартаменты?')) {
+      return
+    }
+
+    try {
+      console.log('🗑️ Deleting apartment:', id)
+      
+      // Получаем CSRF токен
+      await axios.get('/sanctum/csrf-cookie')
+      
+      // Проверяем авторизацию перед удалением
+      const authCheck = await axios.get('/api/check-auth')
+      console.log('Auth check:', authCheck.data)
+      
+      if (!authCheck.data.user || authCheck.data.user.role !== 'admin') {
+        alert('Ошибка: у вас нет прав администратора. Роль: ' + (authCheck.data.user?.role || 'не авторизован'))
+        return
+      }
+      
+      // Получаем CSRF токен из meta тега
+      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+      console.log('CSRF Token:', csrfToken ? 'Found' : 'Not found')
+      
+      const response = await axios.delete(`/api/apartments/${id}`, {
+        headers: {
+          'X-CSRF-TOKEN': csrfToken || '',
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000 // 30 секунд таймаут
+      })
+      
+      console.log('✅ Delete response:', response.data)
+      
+      if (response.data.success) {
+        alert('Апартаменты успешно удалены')
+        this.fetchApartments()
+      } else {
+        alert('Ошибка при удалении: ' + (response.data.message || 'Неизвестная ошибка'))
+      }
+      
+    } catch (error) {
+      console.error('❌ Delete error:', error)
+      console.log('Error code:', error.code)
+      console.log('Error message:', error.message)
+      console.log('Status:', error.response?.status)
+      console.log('Data:', error.response?.data)
+      console.log('Headers:', error.response?.headers)
+      
+      // Обработка таймаута
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        alert('Превышено время ожидания ответа от сервера. Проверьте подключение к интернету и попробуйте снова.')
+        return
+      }
+      
+      // Обработка сетевых ошибок
+      if (!error.response) {
+        alert('Ошибка сети. Проверьте подключение к интернету и попробуйте снова.')
+        return
+      }
+      
+      if (error.response?.status === 401) {
+        alert('Ошибка авторизации. Пожалуйста, войдите заново.')
+        this.$router.push('/login')
+      } else if (error.response?.status === 403) {
+        alert('Доступ запрещен. У вас нет прав для выполнения этого действия.')
+      } else if (error.response?.status === 419) {
+        alert('Сессия истекла. Перезагрузите страницу.')
+        window.location.reload()
+      } else if (error.response?.data?.message) {
+        alert('Ошибка: ' + error.response.data.message)
+      } else {
+        alert('Ошибка сети. Проверьте консоль для деталей.')
+      }
     }
   }
 }
-  }
 }
 </script>
 

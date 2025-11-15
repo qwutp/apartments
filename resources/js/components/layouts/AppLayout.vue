@@ -194,22 +194,40 @@ async forceAuthCheck() {
   console.log('🚪 Выход из аккаунта...')
   
   try {
-    // Очищаем данные
+    // 1. Очищаем ВСЕ данные СРАЗУ
     this.authUser = null
-    localStorage.removeItem('authUser')
+    localStorage.clear()
+    sessionStorage.clear()
     
-    // Отправляем запрос на сервер
-    await axios.post('/logout')
+    // 2. Удаляем cookies вручную
+    document.cookie.split(";").forEach(cookie => {
+      const name = cookie.split("=")[0].trim()
+      document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`
+    })
     
-    // Перезагружаем страницу
-    window.location.href = '/'
+    // 3. Отправляем запрос на сервер (не ждем ответа)
+    fetch('/logout', {
+      method: 'POST',
+      headers: {
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include'
+    }).catch(() => {})
+    
+    // 4. НЕМЕДЛЕННАЯ перезагрузка без кэша
+    setTimeout(() => {
+      // Полная перезагрузка с очисткой кэша
+      window.location.href = window.location.origin + '?t=' + Date.now()
+    }, 10)
     
   } catch (error) {
     console.error('Logout error:', error)
-    // Все равно перезагружаем
-    window.location.href = '/'
+    // Аварийная перезагрузка
+    window.location.href = window.location.origin + '?t=' + Date.now()
   }
 },
+
     
     goToLogin() {
       this.$router.push('/login')

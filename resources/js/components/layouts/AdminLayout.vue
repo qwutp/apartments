@@ -52,65 +52,34 @@ export default {
   },
   methods: {
     async checkAdminAccess() {
-  try {
-    console.log('🔐 Проверка доступа к админке...')
-    
-    const response = await axios.get('/api/check-auth')
-    this.authUser = response.data.user
-    console.log('👤 Получен пользователь:', this.authUser)
-    
-    if (this.authUser && this.authUser.role === 'admin') {
-      console.log('✅ Доступ разрешен')
-      this.hasAccess = true
-      
-      if (this.$route.path === '/admin') {
-        this.$router.replace('/admin/apartments')
+      try {
+        console.log('🔐 Проверка доступа к админке...')
+        const response = await axios.get('/api/check-auth')
+        this.authUser = response.data.user
+        console.log('👤 Получен пользователь:', this.authUser)
+        
+        // Проверяем, что пользователь админ
+        if (this.authUser && this.authUser.role === 'admin') {
+          console.log('✅ Доступ разрешен')
+          this.hasAccess = true
+          
+          // Если мы на /admin, перенаправляем на апартаменты
+          if (this.$route.path === '/admin') {
+            this.$router.replace('/admin/apartments')
+          }
+        } else {
+          console.log('❌ Доступ запрещен. Роль:', this.authUser?.role)
+          this.hasAccess = false
+          this.$router.push('/')
+        }
+      } catch (error) {
+        console.error('❌ Ошибка проверки доступа:', error)
+        this.hasAccess = false
+        this.$router.push('/')
+      } finally {
+        this.loading = false
       }
-    } else {
-      console.log('❌ Доступ запрещен. Роль:', this.authUser?.role)
-      this.hasAccess = false
-      this.$router.push('/')
     }
-  } catch (error) {
-    console.error('❌ Ошибка проверки доступа:', error)
-    this.hasAccess = false
-    this.$router.push('/login')
-  } finally {
-    this.loading = false
-  }
-},
-
-    async checkAdminAccess() {
-  try {
-    console.log('🔐 Проверка доступа к админке...')
-    
-    // Сначала получаем CSRF токен
-    await axios.get('/sanctum/csrf-cookie')
-    
-    const response = await axios.get('/api/check-auth')
-    this.authUser = response.data.user
-    console.log('👤 Получен пользователь:', this.authUser)
-    
-    if (this.authUser && this.authUser.role === 'admin') {
-      console.log('✅ Доступ разрешен')
-      this.hasAccess = true
-      
-      if (this.$route.path === '/admin') {
-        this.$router.replace('/admin/apartments')
-      }
-    } else {
-      console.log('❌ Доступ запрещен. Роль:', this.authUser?.role)
-      this.hasAccess = false
-      this.$router.push('/')
-    }
-  } catch (error) {
-    console.error('❌ Ошибка проверки доступа:', error)
-    this.hasAccess = false
-    this.$router.push('/login')
-  } finally {
-    this.loading = false
-  }
-}
   }
 }
 </script>

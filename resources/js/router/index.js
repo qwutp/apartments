@@ -16,7 +16,6 @@ import AdminApartments from '../components/pages/admin/AdminApartments.vue'
 import AdminCalendar from '../components/pages/admin/AdminCalendar.vue'
 import AdminNotifications from '../components/pages/admin/AdminNotifications.vue'
 import AdminRenters from '../components/pages/admin/AdminRenters.vue'
-import AdminApartmentForm from '../components/pages/admin/AdminApartmentForm.vue'
 
 const routes = [
   {
@@ -63,12 +62,14 @@ const routes = [
       {
         path: 'apartment/create',
         name: 'admin-apartment-create',
-        component: AdminApartmentForm
+        component: () => import('../components/pages/admin/AdminApartmentForm.vue'),
+        meta: { requiresAdmin: true }
       },
       {
         path: 'apartment/edit/:id',
         name: 'admin-apartment-edit',
-        component: AdminApartmentForm
+        component: () => import('../components/pages/admin/AdminApartmentForm.vue'),
+        meta: { requiresAdmin: true }
       },
       {
         path: 'calendar',
@@ -96,6 +97,31 @@ const routes = [
 const router = createRouter({
   history: createWebHistory(),
   routes
+})
+
+// Navigation guard для проверки прав администратора
+router.beforeEach(async (to, from, next) => {
+  // Проверяем, требует ли маршрут прав администратора
+  if (to.matched.some(record => record.meta.requiresAdmin)) {
+    try {
+      const response = await fetch('/api/check-auth', {
+        credentials: 'include'
+      })
+      const data = await response.json()
+      
+      if (data.user && data.user.role === 'admin') {
+        next()
+      } else {
+        alert('Доступ запрещен. Только для администраторов.')
+        next('/')
+      }
+    } catch (error) {
+      console.error('Auth check error:', error)
+      next('/login')
+    }
+  } else {
+    next()
+  }
 })
 
 export default router

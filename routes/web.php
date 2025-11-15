@@ -12,6 +12,7 @@ use App\Http\Controllers\Admin\BookingAdminController;
 use App\Http\Controllers\Admin\UserAdminController;
 use Illuminate\Support\Facades\Route;
 
+
 Route::get('/api/check-auth', function() {
     return [
         'user' => auth()->check() ? [
@@ -21,6 +22,13 @@ Route::get('/api/check-auth', function() {
             'role' => auth()->user()->role
         ] : null
     ];
+});
+
+// Admin apartment routes - protected with admin middleware
+Route::prefix('api')->middleware(['auth', 'admin'])->group(function () {
+    Route::post('/apartments', [ApartmentAdminController::class, 'store']);
+    Route::put('/apartments/{id}', [ApartmentAdminController::class, 'update']);
+    Route::delete('/apartments/{id}', [ApartmentAdminController::class, 'destroy']);
 });
 
 // API маршруты
@@ -57,12 +65,7 @@ Route::middleware('auth')->group(function () {
     // Admin API routes
     Route::prefix('admin')->group(function () {
         
-    // Apartment Admin API Routes
-    Route::post('/apartments', [ApartmentAdminController::class, 'store'])->name('admin.apartments.store');
-    Route::put('/apartments/{apartment}', [ApartmentAdminController::class, 'update'])->name('admin.apartments.update');
-    Route::delete('/apartments/{apartment}', [ApartmentAdminController::class, 'destroy'])->name('admin.apartments.delete');
-    
-    // Booking Admin API Routes
+   // Booking Admin API Routes
     Route::post('/bookings/{booking}/decline', [BookingAdminController::class, 'decline'])->name('admin.bookings.decline');
     Route::get('/calendar/data', [BookingAdminController::class, 'getCalendarData'])->name('admin.calendar.data');
     
@@ -71,16 +74,14 @@ Route::middleware('auth')->group(function () {
     Route::get('/users/search', [UserAdminController::class, 'search'])->name('admin.users.search');
 });
 
-    // API routes for apartments (for Vue components)
-    Route::prefix('api')->group(function () {
-        Route::post('/apartments', [ApartmentAdminController::class, 'store'])->name('api.apartments.store');
-        Route::put('/apartments/{apartment}', [ApartmentAdminController::class, 'update'])->name('api.apartments.update');
-        Route::delete('/apartments/{apartment}', [ApartmentAdminController::class, 'destroy'])->name('api.apartments.delete');
-    });
 });
 
 Route::get('/sanctum/csrf-cookie', function() {
-    return response()->json(['message' => 'CSRF cookie set']);
+    return response()->json([
+        'message' => 'CSRF cookie set',
+        'csrf_token' => csrf_token()
+    ])->cookie('XSRF-TOKEN', csrf_token(), 120, null, null, false, false)
+      ->header('X-CSRF-TOKEN', csrf_token());
 });
 
 Route::get('/api/check-auth', function() {
@@ -94,21 +95,19 @@ Route::get('/api/check-auth', function() {
     ];
 });
 
+// Public API routes (no auth required)
 Route::prefix('api')->group(function () {
     Route::get('/apartments', [ApartmentController::class, 'apiIndex']);
     Route::get('/apartments/{id}', [ApartmentController::class, 'apiShow']);
-    Route::post('/apartments', [ApartmentAdminController::class, 'store']);
-    Route::put('/apartments/{apartment}', [ApartmentAdminController::class, 'update']);
-    Route::delete('/apartments/{apartment}', [ApartmentAdminController::class, 'destroy']);
+    Route::get('/apartments/search', [ApartmentController::class, 'apiSearch']);
 });
 
-// SPA маршруты для админки
 Route::get('/admin/apartment/create', function () {
-    return view('app');
+    return view('app'); // SPA fallback
 })->middleware(['auth', 'admin']);
 
 Route::get('/admin/apartment/edit/{id}', function () {
-    return view('app');
+    return view('app'); // SPA fallback
 })->middleware(['auth', 'admin']);
 
 // SPA Fallback - ДОЛЖЕН БЫТЬ ПОСЛЕДНИМ

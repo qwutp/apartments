@@ -15,10 +15,56 @@ class ApartmentAdminController extends Controller
         \Log::info('ApartmentAdminController::store called', [
             'user_id' => auth()->id(),
             'has_files' => $request->hasFile('images'),
-            'files_count' => $request->hasFile('images') ? count($request->file('images')) : 0
+            'files_count' => $request->hasFile('images') ? count($request->file('images')) : 0,
+            'request_data' => $request->all()
         ]);
         
         try {
+            // Преобразуем строковые числа в числа перед валидацией
+            $requestData = $request->all();
+            
+            // Убираем пустые строки для обязательных полей
+            if (isset($requestData['name']) && trim($requestData['name']) === '') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => ['name' => ['Поле название обязательно для заполнения.']]
+                ], 422);
+            }
+            if (isset($requestData['address']) && trim($requestData['address']) === '') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => ['address' => ['Поле адрес обязательно для заполнения.']]
+                ], 422);
+            }
+            
+            // Преобразуем числовые поля
+            if (isset($requestData['price_per_night']) && $requestData['price_per_night'] !== '') {
+                $requestData['price_per_night'] = (float) $requestData['price_per_night'];
+            }
+            if (isset($requestData['rooms']) && $requestData['rooms'] !== '') {
+                $requestData['rooms'] = (int) $requestData['rooms'];
+            }
+            if (isset($requestData['total_area']) && $requestData['total_area'] !== '') {
+                $requestData['total_area'] = (float) $requestData['total_area'];
+            }
+            if (isset($requestData['max_guests']) && $requestData['max_guests'] !== '') {
+                $requestData['max_guests'] = (int) $requestData['max_guests'];
+            }
+            if (isset($requestData['kitchen_area']) && $requestData['kitchen_area'] !== '') {
+                $requestData['kitchen_area'] = (float) $requestData['kitchen_area'];
+            }
+            if (isset($requestData['living_area']) && $requestData['living_area'] !== '') {
+                $requestData['living_area'] = (float) $requestData['living_area'];
+            }
+            if (isset($requestData['floor']) && $requestData['floor'] !== '') {
+                $requestData['floor'] = (int) $requestData['floor'];
+            }
+            
+            // Создаем новый Request с преобразованными данными
+            $request->merge($requestData);
+            
             $validated = $request->validate([
                 'name' => 'required|string|max:255',
                 'address' => 'required|string|max:255',
@@ -91,8 +137,59 @@ class ApartmentAdminController extends Controller
 
     public function update(Request $request, $id)
     {
+        \Log::info('ApartmentAdminController::update called', [
+            'apartment_id' => $id,
+            'user_id' => auth()->id(),
+            'request_data' => $request->all()
+        ]);
+        
         try {
             $apartment = Apartment::findOrFail($id);
+            
+            // Преобразуем строковые числа в числа перед валидацией
+            $requestData = $request->all();
+            
+            // Убираем пустые строки для обязательных полей
+            if (isset($requestData['name']) && trim($requestData['name']) === '') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => ['name' => ['Поле название обязательно для заполнения.']]
+                ], 422);
+            }
+            if (isset($requestData['address']) && trim($requestData['address']) === '') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => ['address' => ['Поле адрес обязательно для заполнения.']]
+                ], 422);
+            }
+            
+            // Преобразуем числовые поля
+            if (isset($requestData['price_per_night']) && $requestData['price_per_night'] !== '') {
+                $requestData['price_per_night'] = (float) $requestData['price_per_night'];
+            }
+            if (isset($requestData['rooms']) && $requestData['rooms'] !== '') {
+                $requestData['rooms'] = (int) $requestData['rooms'];
+            }
+            if (isset($requestData['total_area']) && $requestData['total_area'] !== '') {
+                $requestData['total_area'] = (float) $requestData['total_area'];
+            }
+            if (isset($requestData['max_guests']) && $requestData['max_guests'] !== '') {
+                $requestData['max_guests'] = (int) $requestData['max_guests'];
+            }
+            if (isset($requestData['kitchen_area']) && $requestData['kitchen_area'] !== '') {
+                $requestData['kitchen_area'] = (float) $requestData['kitchen_area'];
+            }
+            if (isset($requestData['living_area']) && $requestData['living_area'] !== '') {
+                $requestData['living_area'] = (float) $requestData['living_area'];
+            }
+            if (isset($requestData['floor']) && $requestData['floor'] !== '') {
+                $requestData['floor'] = (int) $requestData['floor'];
+            }
+            
+            // Создаем новый Request с преобразованными данными
+            $request->merge($requestData);
             
             $validated = $request->validate([
                 'name' => 'required|string|max:255',
