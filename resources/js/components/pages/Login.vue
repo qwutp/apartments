@@ -57,10 +57,16 @@ export default {
         console.log('Login response:', response.data)
         
         if (response.data.success) {
+          // Сохраняем пользователя в localStorage
+          localStorage.setItem('authUser', JSON.stringify(response.data.user))
+          
           // Уведомляем о успешной авторизации
           window.dispatchEvent(new CustomEvent('authStateChanged', { 
             detail: { user: response.data.user } 
           }))
+          
+          // Небольшая задержка перед переходом, чтобы состояние успело обновиться
+          await new Promise(resolve => setTimeout(resolve, 100))
           
           this.$router.push('/')
         } else {

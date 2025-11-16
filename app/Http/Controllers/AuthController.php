@@ -58,6 +58,8 @@ class AuthController extends Controller
 
             if (Auth::attempt($credentials)) {
                 $request->session()->regenerate();
+                // Обновляем сессию чтобы она не истекала
+                $request->session()->put('_last_activity', now()->timestamp);
                 
                 return response()->json([
                     'success' => true,
@@ -68,7 +70,7 @@ class AuthController extends Controller
                         'email' => Auth::user()->email,
                         'role' => Auth::user()->role
                     ]
-                ]);
+                ])->header('X-CSRF-TOKEN', csrf_token());
             }
 
             return response()->json([

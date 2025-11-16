@@ -222,17 +222,31 @@
       <div class="form-section">
         <h3>Изображения</h3>
         <div class="image-upload">
-          <input type="file" multiple @change="handleImageUpload" accept="image/*">
+          <label class="upload-label" :class="{ uploading: isUploadingImages }">
+            <input type="file" multiple @change="handleImageUpload" accept="image/*" :disabled="isUploadingImages">
+            <span v-if="!isUploadingImages">Выберите изображения</span>
+            <span v-else class="uploading-text">Загрузка изображений...</span>
+          </label>
           <p>Максимум 10 фотографий</p>
+          <div v-if="uploadProgress > 0 && uploadProgress < 100" class="upload-progress">
+            <div class="progress-bar" :style="{ width: uploadProgress + '%' }"></div>
+            <span class="progress-text">{{ uploadProgress }}%</span>
+          </div>
         </div>
         <div v-if="form.images.length > 0" class="images-preview">
           <div v-for="(img, idx) in form.images" :key="img.id || `new-${idx}`" class="image-item">
-            <img 
-              :src="getImageSrc(img)" 
-              :alt="`Image ${idx}`"
-              @error="handleImageError"
-            >
-            <button type="button" @click="removeImage(idx)" class="remove-btn" title="Удалить изображение">✕</button>
+            <div class="image-wrapper">
+              <img 
+                :src="getImageSrc(img)" 
+                :alt="`Image ${idx}`"
+                @error="handleImageError"
+              >
+              <div v-if="img.uploading" class="image-uploading">
+                <div class="spinner"></div>
+                <span>Загрузка...</span>
+              </div>
+            </div>
+            <button type="button" @click="removeImage(idx)" class="remove-btn" title="Удалить изображение" :disabled="img.uploading">✕</button>
           </div>
         </div>
       </div>
@@ -256,6 +270,8 @@ export default {
       isEdit: false,
       apartmentId: null,
       loading: false,
+      isUploadingImages: false,
+      uploadProgress: 0,
       customFurniture: '',
       customAppliance: '',
       furnitureOptions: [
@@ -443,27 +459,57 @@ methods: {
       return
     }
     
-    files.forEach(file => {
+    this.isUploadingImages = true
+    let loadedCount = 0
+    const totalFiles = files.length
+    
+    files.forEach((file, index) => {
       // Проверяем тип файла
       if (!file.type.startsWith('image/')) {
         alert(`Файл ${file.name} не является изображением`)
+        loadedCount++
+        if (loadedCount === totalFiles) {
+          this.isUploadingImages = false
+          this.uploadProgress = 0
+        }
         return
       }
       
       // Проверяем размер (2MB)
       if (file.size > 2 * 1024 * 1024) {
         alert(`Файл ${file.name} слишком большой (максимум 2MB)`)
+        loadedCount++
+        if (loadedCount === totalFiles) {
+          this.isUploadingImages = false
+          this.uploadProgress = 0
+        }
         return
       }
       
       // Создаем preview
       const reader = new FileReader()
       reader.onload = (e) => {
-        this.form.images.push({
+        const imageObj = {
           file: file,
           preview: e.target.result,
-          url: null
-        })
+          url: null,
+          uploading: true
+        }
+        this.form.images.push(imageObj)
+        
+        // Имитируем загрузку (в реальности это будет происходить при сохранении формы)
+        setTimeout(() => {
+          imageObj.uploading = false
+          loadedCount++
+          this.uploadProgress = Math.round((loadedCount / totalFiles) * 100)
+          
+          if (loadedCount === totalFiles) {
+            this.isUploadingImages = false
+            setTimeout(() => {
+              this.uploadProgress = 0
+            }, 1000)
+          }
+        }, 500 + index * 100) // Небольшая задержка для визуального эффекта
       }
       reader.readAsDataURL(file)
     })
@@ -503,7 +549,11 @@ methods: {
       if (img.image_path.startsWith('http://') || img.image_path.startsWith('https://')) {
         return img.image_path
       }
-      // Иначе формируем URL относительно storage
+      // Если путь начинается с images/apartments, используем его напрямую
+      if (img.image_path.startsWith('images/apartments/')) {
+        return `/${img.image_path}`
+      }
+      // Для старых путей из storage
       return `/storage/${img.image_path.replace(/^storage\//, '')}`
     }
     return ''
@@ -1193,13 +1243,63 @@ methods: {
   text-align: center;
 }
 
-.image-upload input {
+.upload-label {
+  display: inline-block;
+  padding: 10px 20px;
+  background: var(--accent);
+  color: #000;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.3s;
   margin-bottom: 10px;
+}
+
+.upload-label:hover:not(.uploading) {
+  background: #B8BBE0;
+}
+
+.upload-label.uploading {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.upload-label input {
+  display: none;
+}
+
+.uploading-text {
+  font-weight: bold;
+}
+
+.upload-progress {
+  margin-top: 10px;
+  position: relative;
+  height: 20px;
+  background: #f0f0f0;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.3s;
+}
+
+.progress-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 12px;
+  font-weight: bold;
+  color: #000;
 }
 
 .image-upload p {
   font-size: 12px;
   color: #999;
+  margin-top: 10px;
 }
 
 .images-preview {
@@ -1215,12 +1315,48 @@ methods: {
   height: 100px;
 }
 
+.image-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
 .image-item img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   border-radius: 4px;
   border: 1px solid #E0E0E0;
+}
+
+.image-uploading {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  color: white;
+  font-size: 12px;
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 5px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 .remove-btn {

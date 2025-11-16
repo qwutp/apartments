@@ -155,12 +155,44 @@
             <div class="map" id="map-container"></div>
           </div>
 
-          <ReviewsList :apartment-id="apartment.id" :reviews="apartment.reviews" />
+          <ReviewsList :apartment-id="apartment.id" :reviews="apartment.reviews" @review-added="handleReviewAdded" />
         </div>
 
-        <BookingPanel :apartment="apartment" />
+        <div class="right-column">
+          <BookingPanel :apartment="apartment" />
+        </div>
       </div>
     </template>
+    
+    <!-- Модальное окно галереи -->
+    <div v-if="showGallery && apartment.images && apartment.images.length > 0" class="gallery-modal" @click="closeGallery">
+      <div class="gallery-modal-content" @click.stop>
+        <button class="gallery-close" @click="closeGallery">×</button>
+        <div class="gallery-main-view">
+          <button v-if="currentPhotoIndex > 0" class="gallery-nav gallery-prev" @click="prevPhoto">‹</button>
+          <img 
+            :src="getImageUrl(apartment.images[currentPhotoIndex])" 
+            :alt="apartment.name"
+            @error="handleImageError"
+          >
+          <button v-if="currentPhotoIndex < apartment.images.length - 1" class="gallery-nav gallery-next" @click="nextPhoto">›</button>
+        </div>
+        <div class="gallery-thumbnails">
+          <img 
+            v-for="(img, idx) in apartment.images"
+            :key="img.id || idx"
+            :src="getImageUrl(img)"
+            :alt="`Photo ${idx + 1}`"
+            :class="{ active: idx === currentPhotoIndex }"
+            @click="setCurrentPhoto(idx)"
+            @error="handleImageError"
+          >
+        </div>
+        <div class="gallery-counter">
+          {{ currentPhotoIndex + 1 }} / {{ apartment.images.length }}
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -186,7 +218,9 @@ export default {
         rating: 0,
         reviews_count: 0
       },
-      loading: true
+      loading: true,
+      showGallery: false,
+      currentPhotoIndex: 0
     }
   },
   mounted() {
@@ -237,8 +271,23 @@ export default {
       }
     },
     showAllPhotos() {
-      // TODO: Implement photo gallery modal
-      console.log('Show all photos')
+      this.showGallery = true
+    },
+    closeGallery() {
+      this.showGallery = false
+    },
+    nextPhoto() {
+      if (this.currentPhotoIndex < this.apartment.images.length - 1) {
+        this.currentPhotoIndex++
+      }
+    },
+    prevPhoto() {
+      if (this.currentPhotoIndex > 0) {
+        this.currentPhotoIndex--
+      }
+    },
+    setCurrentPhoto(index) {
+      this.currentPhotoIndex = index
     },
     
     getImageUrl(img) {
@@ -253,7 +302,11 @@ export default {
         if (img.image_path.startsWith('http://') || img.image_path.startsWith('https://')) {
           return img.image_path
         }
-        // Иначе формируем URL относительно storage
+        // Если путь начинается с images/apartments, используем его напрямую
+        if (img.image_path.startsWith('images/apartments/')) {
+          return `/${img.image_path}`
+        }
+        // Для старых путей из storage
         return `/storage/${img.image_path.replace(/^storage\//, '')}`
       }
       return ''
@@ -417,6 +470,11 @@ export default {
       }).catch(err => {
         console.error('Geocoding error:', err)
       })
+    },
+    
+    handleReviewAdded() {
+      // Перезагружаем данные апартамента для обновления отзывов
+      this.fetchApartment(this.$route.params.id)
     }
   }
 }
@@ -439,6 +497,7 @@ export default {
   gap: 40px;
   align-items: start;
   position: relative;
+  min-height: calc(100vh - 100px);
 }
 
 .left-column {
@@ -450,6 +509,12 @@ export default {
 .left-column h1 {
   font-size: 24px;
   margin-bottom: 20px;
+}
+
+.right-column {
+  position: relative;
+  align-self: start;
+  height: fit-content;
 }
 
 .gallery {
@@ -640,9 +705,146 @@ export default {
   margin-bottom: 30px;
 }
 
+.gallery-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.95);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.gallery-modal-content {
+  position: relative;
+  max-width: 90vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.gallery-close {
+  position: absolute;
+  top: -40px;
+  right: 0;
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: 40px;
+  cursor: pointer;
+  z-index: 10001;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gallery-close:hover {
+  opacity: 0.7;
+}
+
+.gallery-main-view {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.gallery-main-view img {
+  max-width: 80vw;
+  max-height: 70vh;
+  object-fit: contain;
+}
+
+.gallery-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(255, 255, 255, 0.3);
+  border: none;
+  color: white;
+  font-size: 60px;
+  cursor: pointer;
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  z-index: 10001;
+  transition: background 0.3s;
+}
+
+.gallery-nav:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.gallery-prev {
+  left: -80px;
+}
+
+.gallery-next {
+  right: -80px;
+}
+
+.gallery-thumbnails {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  max-width: 90vw;
+  padding: 10px;
+}
+
+.gallery-thumbnails img {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  cursor: pointer;
+  border: 3px solid transparent;
+  border-radius: 4px;
+  opacity: 0.6;
+  transition: all 0.3s;
+}
+
+.gallery-thumbnails img:hover {
+  opacity: 0.8;
+}
+
+.gallery-thumbnails img.active {
+  border-color: white;
+  opacity: 1;
+}
+
+.gallery-counter {
+  color: white;
+  margin-top: 10px;
+  font-size: 16px;
+}
+
 @media (max-width: 1024px) {
   .detail-container {
     grid-template-columns: 1fr;
+  }
+  
+  .gallery-prev {
+    left: 10px;
+  }
+  
+  .gallery-next {
+    right: 10px;
+  }
+  
+  .gallery-nav {
+    width: 40px;
+    height: 40px;
+    font-size: 40px;
   }
 }
 </style>

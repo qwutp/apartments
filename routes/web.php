@@ -13,17 +13,6 @@ use App\Http\Controllers\Admin\UserAdminController;
 use Illuminate\Support\Facades\Route;
 
 
-Route::get('/api/check-auth', function() {
-    return [
-        'user' => auth()->check() ? [
-            'id' => auth()->id(),
-            'name' => auth()->user()->name,
-            'email' => auth()->user()->email,
-            'role' => auth()->user()->role
-        ] : null
-    ];
-});
-
 // Admin apartment routes - protected with admin middleware
 Route::prefix('api')->middleware(['auth', 'admin'])->group(function () {
     Route::post('/apartments', [ApartmentAdminController::class, 'store']);
@@ -85,15 +74,29 @@ Route::get('/sanctum/csrf-cookie', function() {
       ->header('X-CSRF-TOKEN', csrf_token());
 });
 
+// Check auth endpoint - должен быть доступен без авторизации
 Route::get('/api/check-auth', function() {
-    return [
-        'user' => auth()->check() ? [
-            'id' => auth()->id(),
-            'name' => auth()->user()->name,
-            'email' => auth()->user()->email,
-            'role' => auth()->user()->role
-        ] : null
-    ];
+    try {
+        $user = null;
+        if (auth()->check()) {
+            $user = [
+                'id' => auth()->id(),
+                'name' => auth()->user()->name,
+                'email' => auth()->user()->email,
+                'role' => auth()->user()->role
+            ];
+        }
+        
+        return response()->json([
+            'user' => $user
+        ])->header('X-CSRF-TOKEN', csrf_token());
+    } catch (\Exception $e) {
+        \Log::error('Check auth error: ' . $e->getMessage());
+        return response()->json([
+            'user' => null,
+            'error' => $e->getMessage()
+        ], 500);
+    }
 });
 
 // Public API routes (no auth required)

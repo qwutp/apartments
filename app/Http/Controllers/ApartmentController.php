@@ -179,12 +179,18 @@ class ApartmentController extends Controller
                     ];
                 }
                 
-                // Убираем 'storage/' из начала, если есть
-                $path = ltrim($path, 'storage/');
+                // Убираем лишние слеши
                 $path = ltrim($path, '/');
                 
-                // Используем asset() для формирования URL относительно public
-                $url = asset('storage/' . $path);
+                // Если путь начинается с images/apartments, используем его напрямую
+                if (str_starts_with($path, 'images/apartments/')) {
+                    // Для путей в public используем прямой путь
+                    $url = '/' . $path;
+                } else {
+                    // Для старых путей из storage
+                    $path = ltrim($path, 'storage/');
+                    $url = asset('storage/' . $path);
+                }
                 
                 return [
                     'id' => $img->id,

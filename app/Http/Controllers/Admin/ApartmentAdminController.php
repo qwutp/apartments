@@ -91,14 +91,26 @@ class ApartmentAdminController extends Controller
             // Обработка изображений
             if ($request->hasFile('images')) {
                 $images = $request->file('images');
+                // Создаем директорию если её нет
+                $uploadPath = public_path('images/apartments');
+                if (!file_exists($uploadPath)) {
+                    mkdir($uploadPath, 0755, true);
+                }
+                
                 // Если images - массив
                 if (is_array($images)) {
                     foreach ($images as $index => $image) {
                         if ($image && $image->isValid()) {
-                            $path = $image->store('apartments', 'public');
+                            // Генерируем уникальное имя файла
+                            $fileName = time() . '_' . uniqid() . '.' . $image->getClientOriginalExtension();
+                            // Сохраняем в public/images/apartments
+                            $image->move($uploadPath, $fileName);
+                            // Сохраняем путь относительно public
+                            $imagePath = 'images/apartments/' . $fileName;
+                            
                             ApartmentImage::create([
                                 'apartment_id' => $apartment->id,
-                                'image_path' => $path,
+                                'image_path' => $imagePath,
                                 'is_main' => $index === 0,
                                 'order' => $index,
                             ]);
@@ -107,10 +119,16 @@ class ApartmentAdminController extends Controller
                 } else {
                     // Если одно изображение
                     if ($images->isValid()) {
-                        $path = $images->store('apartments', 'public');
+                        // Генерируем уникальное имя файла
+                        $fileName = time() . '_' . uniqid() . '.' . $images->getClientOriginalExtension();
+                        // Сохраняем в public/images/apartments
+                        $images->move($uploadPath, $fileName);
+                        // Сохраняем путь относительно public
+                        $imagePath = 'images/apartments/' . $fileName;
+                        
                         ApartmentImage::create([
                             'apartment_id' => $apartment->id,
-                            'image_path' => $path,
+                            'image_path' => $imagePath,
                             'is_main' => true,
                             'order' => 0,
                         ]);
@@ -233,8 +251,11 @@ class ApartmentAdminController extends Controller
                 foreach ($deletedImageIds as $imageId) {
                     $image = ApartmentImage::find($imageId);
                     if ($image && $image->apartment_id == $apartment->id) {
-                        // Удаляем файл из хранилища
-                        Storage::disk('public')->delete($image->image_path);
+                        // Удаляем файл из public/images/apartments
+                        $filePath = public_path($image->image_path);
+                        if (file_exists($filePath)) {
+                            unlink($filePath);
+                        }
                         // Удаляем запись из БД
                         $image->delete();
                     }
@@ -244,15 +265,27 @@ class ApartmentAdminController extends Controller
             // Обработка новых изображений
             if ($request->hasFile('images')) {
                 $images = $request->file('images');
+                // Создаем директорию если её нет
+                $uploadPath = public_path('images/apartments');
+                if (!file_exists($uploadPath)) {
+                    mkdir($uploadPath, 0755, true);
+                }
+                
                 // Если images - массив
                 if (is_array($images)) {
                     $existingCount = $apartment->images()->count();
                     foreach ($images as $index => $image) {
                         if ($image && $image->isValid()) {
-                            $path = $image->store('apartments', 'public');
+                            // Генерируем уникальное имя файла
+                            $fileName = time() . '_' . uniqid() . '.' . $image->getClientOriginalExtension();
+                            // Сохраняем в public/images/apartments
+                            $image->move($uploadPath, $fileName);
+                            // Сохраняем путь относительно public
+                            $imagePath = 'images/apartments/' . $fileName;
+                            
                             ApartmentImage::create([
                                 'apartment_id' => $apartment->id,
-                                'image_path' => $path,
+                                'image_path' => $imagePath,
                                 'is_main' => ($existingCount === 0 && $index === 0), // Первое изображение становится главным, если их еще нет
                                 'order' => $existingCount + $index,
                             ]);
@@ -262,10 +295,16 @@ class ApartmentAdminController extends Controller
                     // Если одно изображение
                     if ($images->isValid()) {
                         $existingCount = $apartment->images()->count();
-                        $path = $images->store('apartments', 'public');
+                        // Генерируем уникальное имя файла
+                        $fileName = time() . '_' . uniqid() . '.' . $images->getClientOriginalExtension();
+                        // Сохраняем в public/images/apartments
+                        $images->move($uploadPath, $fileName);
+                        // Сохраняем путь относительно public
+                        $imagePath = 'images/apartments/' . $fileName;
+                        
                         ApartmentImage::create([
                             'apartment_id' => $apartment->id,
-                            'image_path' => $path,
+                            'image_path' => $imagePath,
                             'is_main' => $existingCount === 0,
                             'order' => $existingCount,
                         ]);

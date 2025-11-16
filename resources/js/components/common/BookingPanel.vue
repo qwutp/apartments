@@ -146,6 +146,7 @@ export default {
 }
 
 .panel-sticky {
+  position: -webkit-sticky; /* Для Safari */
   position: sticky;
   top: 20px;
   border: 1px solid #E0E0E0;
@@ -153,10 +154,12 @@ export default {
   padding: 20px;
   background: white;
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  z-index: 10;
+  z-index: 100;
   align-self: start;
   max-height: calc(100vh - 40px);
   overflow-y: auto;
+  transition: top 0.3s ease;
+  will-change: transform;
 }
 
 .price-section {

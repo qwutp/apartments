@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\BookingAdminController;
 use App\Http\Controllers\ApartmentController;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\FavoriteController;
+use App\Http\Controllers\ReviewController;
 use Illuminate\Support\Facades\Route;
 
 // Public API routes
@@ -19,6 +20,8 @@ Route::middleware('auth', 'user')->group(function () {
     Route::post('/bookings', [BookingController::class, 'apiStore']);
     Route::post('/apartments/{apartment}/favorite', [FavoriteController::class, 'apiToggle']);
     Route::get('/favorites', [FavoriteController::class, 'apiList']);
+    Route::get('/reviews/bookings', [ReviewController::class, 'apiGetBookingsForReview']);
+    Route::post('/reviews', [ReviewController::class, 'apiStore']);
 });
 
 // Admin API routes

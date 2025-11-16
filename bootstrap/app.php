@@ -16,6 +16,17 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin' => \App\Http\Middleware\IsAdmin::class,
             'user' => \App\Http\Middleware\IsUser::class,
         ]);
+        
+        // Включаем сессию для API маршрутов (нужно для Sanctum)
+        $middleware->api(prepend: [
+            \Illuminate\Session\Middleware\StartSession::class,
+            \App\Http\Middleware\RefreshSession::class,
+        ]);
+        
+        // Также добавляем для web маршрутов
+        $middleware->web(append: [
+            \App\Http\Middleware\RefreshSession::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

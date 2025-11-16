@@ -81,7 +81,8 @@ export default {
       authUser: null,
       showHeader: true,
       showFooter: true,
-      loggingOut: false
+      loggingOut: false,
+      _checkingAuth: false
     }
   },
   mounted() {
@@ -98,14 +99,26 @@ export default {
   watch: {
     '$route'(to, from) {
       this.updateVisibility()
-      this.checkRouteAccess()
+      // Проверяем доступ только для защищенных маршрутов
+      const protectedRoutes = ['/user', '/admin']
+      const isProtectedRoute = protectedRoutes.some(route => to.path.startsWith(route))
+      if (isProtectedRoute) {
+        this.checkRouteAccess()
+      }
     }
   },
   methods: {
     handleAuthChange(event) {
       console.log('Auth state changed from event:', event.detail)
       this.authUser = event.detail.user
-      this.checkRouteAccess()
+      // Сохраняем в localStorage
+      if (this.authUser) {
+        localStorage.setItem('authUser', JSON.stringify(this.authUser))
+      } else {
+        localStorage.removeItem('authUser')
+      }
+      // НЕ вызываем checkRouteAccess здесь - это может вызвать проблемы
+      // Проверка доступа будет при переходе на защищенные маршруты
     },
 
     checkLogoutParam() {
@@ -133,19 +146,32 @@ export default {
       this.showFooter = !noLayoutPaths.includes(currentPath)
     },
     
-    checkRouteAccess() {
+    async checkRouteAccess() {
   // Только если пользователь явно пытается зайти на защищенную страницу
-  const protectedRoutes = ['/user', '/admin']
   const currentRoute = this.$route.path
   
-  const isProtectedRoute = protectedRoutes.some(route => 
-    currentRoute.startsWith(route)
-  )
-  
   // Если пользователь не авторизован и находится на защищенных маршрутах
-  if (!this.authUser && isProtectedRoute) {
-    console.log('🚫 Доступ запрещен, перенаправление на вход')
-    this.$router.push('/login')
+  if (!this.authUser) {
+    // Делаем финальную проверку с сервера перед редиректом (только один раз)
+    if (!this._checkingAuth) {
+      this._checkingAuth = true
+      try {
+        const response = await axios.get('/api/check-auth')
+        if (!response.data?.user) {
+          console.log('🚫 Доступ запрещен, перенаправление на вход')
+          this.$router.push('/login')
+        } else {
+          // Пользователь авторизован, обновляем состояние
+          this.authUser = response.data.user
+          localStorage.setItem('authUser', JSON.stringify(this.authUser))
+        }
+      } catch (error) {
+        console.log('🚫 Ошибка проверки доступа, перенаправление на вход')
+        this.$router.push('/login')
+      } finally {
+        this._checkingAuth = false
+      }
+    }
   }
   
   // Если пользователь авторизован и находится на логине/регистрации
@@ -173,17 +199,56 @@ async forceAuthCheck() {
     
     async loadAuthUser() {
   try {
+    // Сначала проверяем localStorage для быстрого отображения
+    const cachedUser = localStorage.getItem('authUser')
+    if (cachedUser) {
+      try {
+        this.authUser = JSON.parse(cachedUser)
+      } catch (e) {
+        // Игнорируем ошибку парсинга
+      }
+    }
+    
     console.log('🔄 Загрузка пользователя...')
+    
+    // Обновляем CSRF токен перед проверкой авторизации
+    try {
+      await axios.get('/sanctum/csrf-cookie')
+    } catch (csrfError) {
+      console.warn('CSRF cookie warning:', csrfError)
+    }
+    
     const response = await axios.get('/api/check-auth')
     console.log('📡 Ответ от API:', response.data)
-    this.authUser = response.data.user
     
-    // НЕ делаем автоматический редирект здесь
-    // Проверка доступа будет в отдельных методах
+    // Обновляем CSRF токен из заголовков если есть
+    const csrfToken = response.headers['x-csrf-token']
+    if (csrfToken) {
+      const metaToken = document.querySelector('meta[name="csrf-token"]')
+      if (metaToken) {
+        metaToken.setAttribute('content', csrfToken)
+      }
+    }
+    
+    // Обновляем состояние пользователя
+    const serverUser = response.data?.user || null
+    this.authUser = serverUser
+    
+    // Сохраняем в localStorage для быстрого доступа
+    if (this.authUser) {
+      localStorage.setItem('authUser', JSON.stringify(this.authUser))
+    } else {
+      localStorage.removeItem('authUser')
+    }
     
   } catch (error) {
     console.error('❌ Ошибка загрузки пользователя:', error)
-    this.authUser = null
+    // НЕ очищаем authUser сразу - может быть временная проблема сети
+    // Только если это явная ошибка авторизации
+    if (error.response?.status === 401 || error.response?.status === 419) {
+      this.authUser = null
+      localStorage.removeItem('authUser')
+    }
   }
 },
     
