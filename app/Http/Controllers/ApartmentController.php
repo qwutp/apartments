@@ -166,10 +166,32 @@ class ApartmentController extends Controller
             'status' => $apartment->status,
             'rating' => $apartment->reviews->avg('rating') ?? 0,
             'reviews_count' => $apartment->reviews->count(),
-            'images' => $apartment->images->map(fn($img) => [
-                'id' => $img->id,
-                'url' => Storage::url($img->image_path)
-            ]),
+            'images' => $apartment->images->map(function($img) {
+                // Формируем правильный URL для изображения
+                $path = $img->image_path;
+                
+                // Если путь уже содержит полный URL, возвращаем его
+                if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+                    return [
+                        'id' => $img->id,
+                        'url' => $path,
+                        'image_path' => $path
+                    ];
+                }
+                
+                // Убираем 'storage/' из начала, если есть
+                $path = ltrim($path, 'storage/');
+                $path = ltrim($path, '/');
+                
+                // Используем asset() для формирования URL относительно public
+                $url = asset('storage/' . $path);
+                
+                return [
+                    'id' => $img->id,
+                    'url' => $url,
+                    'image_path' => $img->image_path
+                ];
+            }),
             'reviews' => $apartment->reviews->map(fn($rev) => [
                 'id' => $rev->id,
                 'user' => ['id' => $rev->user->id, 'name' => $rev->user->name],
@@ -193,5 +215,25 @@ class ApartmentController extends Controller
         }
         
         return $formatted;
+    }
+
+    private function translateBalcony($value)
+    {
+        $translations = [
+            'none' => 'нет',
+            'balcony' => 'балкон',
+            'loggia' => 'лоджия',
+        ];
+        return $translations[$value] ?? $value;
+    }
+
+    private function translateBathroom($value)
+    {
+        $translations = [
+            'shared' => 'совмещенный',
+            'private' => 'раздельный',
+            'multiple' => 'несколько',
+        ];
+        return $translations[$value] ?? $value;
     }
 }

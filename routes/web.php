@@ -27,7 +27,7 @@ Route::get('/api/check-auth', function() {
 // Admin apartment routes - protected with admin middleware
 Route::prefix('api')->middleware(['auth', 'admin'])->group(function () {
     Route::post('/apartments', [ApartmentAdminController::class, 'store']);
-    Route::put('/apartments/{id}', [ApartmentAdminController::class, 'update']);
+    Route::match(['put', 'post'], '/apartments/{id}', [ApartmentAdminController::class, 'update'])->where('id', '[0-9]+');
     Route::delete('/apartments/{id}', [ApartmentAdminController::class, 'destroy']);
 });
 
@@ -70,6 +70,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/calendar/data', [BookingAdminController::class, 'getCalendarData'])->name('admin.calendar.data');
     
     // User Admin API Routes
+    Route::get('/users', [UserAdminController::class, 'index'])->name('admin.users.index');
     Route::get('/users/{user}', [UserAdminController::class, 'show'])->name('admin.users.show');
     Route::get('/users/search', [UserAdminController::class, 'search'])->name('admin.users.search');
 });

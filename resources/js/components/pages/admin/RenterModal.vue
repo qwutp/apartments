@@ -11,7 +11,7 @@
           <h3>Личные данные</h3>
           <div class="info-row">
             <span>ФИО:</span>
-            <strong>{{ renter.name }}</strong>
+            <strong>{{ formatFullName() }}</strong>
           </div>
           <div class="info-row">
             <span>Почта:</span>
@@ -21,17 +21,13 @@
             <span>Телефон:</span>
             <strong>{{ renter.phone || '-' }}</strong>
           </div>
-          <div class="info-row">
-            <span>Адрес:</span>
-            <strong>{{ renter.address || '-' }}</strong>
-          </div>
         </div>
 
         <div class="info-section">
           <h3>Документы</h3>
           <div class="info-row">
             <span>Паспорт:</span>
-            <strong>{{ renter.passport_series }} {{ renter.passport_number }}</strong>
+            <strong>{{ formatPassport() }}</strong>
           </div>
         </div>
 
@@ -39,11 +35,7 @@
           <h3>Статистика</h3>
           <div class="info-row">
             <span>Прошлых бронирований:</span>
-            <strong>{{ renter.bookings_count || 0 }}</strong>
-          </div>
-          <div class="info-row">
-            <span>Рейтинг:</span>
-            <strong>{{ renter.rating || 'Нет данных' }}</strong>
+            <strong>{{ renter.past_booking_count || renter.booking_count || 0 }}</strong>
           </div>
         </div>
       </div>
@@ -66,6 +58,18 @@ export default {
   methods: {
     close() {
       this.$emit('close')
+    },
+    formatFullName() {
+      if (this.renter.last_name || this.renter.first_name || this.renter.patronymic) {
+        return [this.renter.last_name, this.renter.first_name, this.renter.patronymic].filter(Boolean).join(' ').trim()
+      }
+      return this.renter.name || 'Не указано'
+    },
+    formatPassport() {
+      if (this.renter.passport_series && this.renter.passport_number) {
+        return `${this.renter.passport_series} ${this.renter.passport_number}`
+      }
+      return '-'
     }
   }
 }

@@ -20,50 +20,21 @@ class ApartmentAdminController extends Controller
         ]);
         
         try {
-            // Преобразуем строковые числа в числа перед валидацией
-            $requestData = $request->all();
-            
-            // Убираем пустые строки для обязательных полей
-            if (isset($requestData['name']) && trim($requestData['name']) === '') {
+            // Проверяем обязательные поля
+            if (!$request->has('name') || trim($request->input('name')) === '') {
                 return response()->json([
                     'success' => false,
                     'message' => 'Validation failed',
                     'errors' => ['name' => ['Поле название обязательно для заполнения.']]
                 ], 422);
             }
-            if (isset($requestData['address']) && trim($requestData['address']) === '') {
+            if (!$request->has('address') || trim($request->input('address')) === '') {
                 return response()->json([
                     'success' => false,
                     'message' => 'Validation failed',
                     'errors' => ['address' => ['Поле адрес обязательно для заполнения.']]
                 ], 422);
             }
-            
-            // Преобразуем числовые поля
-            if (isset($requestData['price_per_night']) && $requestData['price_per_night'] !== '') {
-                $requestData['price_per_night'] = (float) $requestData['price_per_night'];
-            }
-            if (isset($requestData['rooms']) && $requestData['rooms'] !== '') {
-                $requestData['rooms'] = (int) $requestData['rooms'];
-            }
-            if (isset($requestData['total_area']) && $requestData['total_area'] !== '') {
-                $requestData['total_area'] = (float) $requestData['total_area'];
-            }
-            if (isset($requestData['max_guests']) && $requestData['max_guests'] !== '') {
-                $requestData['max_guests'] = (int) $requestData['max_guests'];
-            }
-            if (isset($requestData['kitchen_area']) && $requestData['kitchen_area'] !== '') {
-                $requestData['kitchen_area'] = (float) $requestData['kitchen_area'];
-            }
-            if (isset($requestData['living_area']) && $requestData['living_area'] !== '') {
-                $requestData['living_area'] = (float) $requestData['living_area'];
-            }
-            if (isset($requestData['floor']) && $requestData['floor'] !== '') {
-                $requestData['floor'] = (int) $requestData['floor'];
-            }
-            
-            // Создаем новый Request с преобразованными данными
-            $request->merge($requestData);
             
             $validated = $request->validate([
                 'name' => 'required|string|max:255',
@@ -87,8 +58,23 @@ class ApartmentAdminController extends Controller
                 'latitude' => 'nullable|numeric',
                 'longitude' => 'nullable|numeric',
                 'images' => 'nullable|array|max:10',
-                'images.*' => 'image|mimes:jpeg,png,jpg,gif|max:2048',
+                'images.*' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
             ]);
+            
+            // Преобразуем числовые поля после валидации
+            $validated['price_per_night'] = (float) $validated['price_per_night'];
+            $validated['rooms'] = (int) $validated['rooms'];
+            $validated['total_area'] = (float) $validated['total_area'];
+            $validated['max_guests'] = (int) $validated['max_guests'];
+            if (isset($validated['kitchen_area'])) {
+                $validated['kitchen_area'] = (float) $validated['kitchen_area'];
+            }
+            if (isset($validated['living_area'])) {
+                $validated['living_area'] = (float) $validated['living_area'];
+            }
+            if (isset($validated['floor'])) {
+                $validated['floor'] = (int) $validated['floor'];
+            }
 
             $apartmentData = array_merge($validated, [
                 'owner_id' => auth()->id(),
@@ -102,15 +88,33 @@ class ApartmentAdminController extends Controller
 
             $apartment = Apartment::create($apartmentData);
 
+            // Обработка изображений
             if ($request->hasFile('images')) {
-                foreach ($request->file('images') as $index => $image) {
-                    $path = $image->store('apartments', 'public');
-                    ApartmentImage::create([
-                        'apartment_id' => $apartment->id,
-                        'image_path' => $path,
-                        'is_main' => $index === 0,
-                        'order' => $index,
-                    ]);
+                $images = $request->file('images');
+                // Если images - массив
+                if (is_array($images)) {
+                    foreach ($images as $index => $image) {
+                        if ($image && $image->isValid()) {
+                            $path = $image->store('apartments', 'public');
+                            ApartmentImage::create([
+                                'apartment_id' => $apartment->id,
+                                'image_path' => $path,
+                                'is_main' => $index === 0,
+                                'order' => $index,
+                            ]);
+                        }
+                    }
+                } else {
+                    // Если одно изображение
+                    if ($images->isValid()) {
+                        $path = $images->store('apartments', 'public');
+                        ApartmentImage::create([
+                            'apartment_id' => $apartment->id,
+                            'image_path' => $path,
+                            'is_main' => true,
+                            'order' => 0,
+                        ]);
+                    }
                 }
             }
 
@@ -140,56 +144,31 @@ class ApartmentAdminController extends Controller
         \Log::info('ApartmentAdminController::update called', [
             'apartment_id' => $id,
             'user_id' => auth()->id(),
-            'request_data' => $request->all()
+            'method' => $request->method(),
+            'has_method_override' => $request->has('_method'),
+            'request_data' => $request->all(),
+            'request_input' => $request->input(),
+            'request_all' => $request->all()
         ]);
         
         try {
             $apartment = Apartment::findOrFail($id);
             
-            // Преобразуем строковые числа в числа перед валидацией
-            $requestData = $request->all();
-            
-            // Убираем пустые строки для обязательных полей
-            if (isset($requestData['name']) && trim($requestData['name']) === '') {
+            // Проверяем обязательные поля
+            if (!$request->has('name') || trim($request->input('name')) === '') {
                 return response()->json([
                     'success' => false,
                     'message' => 'Validation failed',
                     'errors' => ['name' => ['Поле название обязательно для заполнения.']]
                 ], 422);
             }
-            if (isset($requestData['address']) && trim($requestData['address']) === '') {
+            if (!$request->has('address') || trim($request->input('address')) === '') {
                 return response()->json([
                     'success' => false,
                     'message' => 'Validation failed',
                     'errors' => ['address' => ['Поле адрес обязательно для заполнения.']]
                 ], 422);
             }
-            
-            // Преобразуем числовые поля
-            if (isset($requestData['price_per_night']) && $requestData['price_per_night'] !== '') {
-                $requestData['price_per_night'] = (float) $requestData['price_per_night'];
-            }
-            if (isset($requestData['rooms']) && $requestData['rooms'] !== '') {
-                $requestData['rooms'] = (int) $requestData['rooms'];
-            }
-            if (isset($requestData['total_area']) && $requestData['total_area'] !== '') {
-                $requestData['total_area'] = (float) $requestData['total_area'];
-            }
-            if (isset($requestData['max_guests']) && $requestData['max_guests'] !== '') {
-                $requestData['max_guests'] = (int) $requestData['max_guests'];
-            }
-            if (isset($requestData['kitchen_area']) && $requestData['kitchen_area'] !== '') {
-                $requestData['kitchen_area'] = (float) $requestData['kitchen_area'];
-            }
-            if (isset($requestData['living_area']) && $requestData['living_area'] !== '') {
-                $requestData['living_area'] = (float) $requestData['living_area'];
-            }
-            if (isset($requestData['floor']) && $requestData['floor'] !== '') {
-                $requestData['floor'] = (int) $requestData['floor'];
-            }
-            
-            // Создаем новый Request с преобразованными данными
-            $request->merge($requestData);
             
             $validated = $request->validate([
                 'name' => 'required|string|max:255',
@@ -212,7 +191,24 @@ class ApartmentAdminController extends Controller
                 'description' => 'nullable|string',
                 'latitude' => 'nullable|numeric',
                 'longitude' => 'nullable|numeric',
+                'images' => 'nullable|array|max:10',
+                'images.*' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
             ]);
+            
+            // Преобразуем числовые поля после валидации
+            $validated['price_per_night'] = (float) $validated['price_per_night'];
+            $validated['rooms'] = (int) $validated['rooms'];
+            $validated['total_area'] = (float) $validated['total_area'];
+            $validated['max_guests'] = (int) $validated['max_guests'];
+            if (isset($validated['kitchen_area'])) {
+                $validated['kitchen_area'] = (float) $validated['kitchen_area'];
+            }
+            if (isset($validated['living_area'])) {
+                $validated['living_area'] = (float) $validated['living_area'];
+            }
+            if (isset($validated['floor'])) {
+                $validated['floor'] = (int) $validated['floor'];
+            }
 
             if ($apartment->status !== 'available') {
                 return response()->json([
@@ -230,6 +226,54 @@ class ApartmentAdminController extends Controller
             ]);
 
             $apartment->update($apartmentData);
+
+            // Обработка удаления изображений
+            if ($request->has('deleted_images') && is_array($request->input('deleted_images'))) {
+                $deletedImageIds = $request->input('deleted_images');
+                foreach ($deletedImageIds as $imageId) {
+                    $image = ApartmentImage::find($imageId);
+                    if ($image && $image->apartment_id == $apartment->id) {
+                        // Удаляем файл из хранилища
+                        Storage::disk('public')->delete($image->image_path);
+                        // Удаляем запись из БД
+                        $image->delete();
+                    }
+                }
+            }
+
+            // Обработка новых изображений
+            if ($request->hasFile('images')) {
+                $images = $request->file('images');
+                // Если images - массив
+                if (is_array($images)) {
+                    $existingCount = $apartment->images()->count();
+                    foreach ($images as $index => $image) {
+                        if ($image && $image->isValid()) {
+                            $path = $image->store('apartments', 'public');
+                            ApartmentImage::create([
+                                'apartment_id' => $apartment->id,
+                                'image_path' => $path,
+                                'is_main' => ($existingCount === 0 && $index === 0), // Первое изображение становится главным, если их еще нет
+                                'order' => $existingCount + $index,
+                            ]);
+                        }
+                    }
+                } else {
+                    // Если одно изображение
+                    if ($images->isValid()) {
+                        $existingCount = $apartment->images()->count();
+                        $path = $images->store('apartments', 'public');
+                        ApartmentImage::create([
+                            'apartment_id' => $apartment->id,
+                            'image_path' => $path,
+                            'is_main' => $existingCount === 0,
+                            'order' => $existingCount,
+                        ]);
+                    }
+                }
+            }
+
+            \Log::info('Apartment updated successfully', ['apartment_id' => $apartment->id]);
 
             return response()->json([
                 'success' => true,

@@ -16,7 +16,7 @@
 <script>
 import SearchBar from '../common/SearchBar.vue'
 import ApartmentGrid from '../common/ApartmentGrid.vue'
-import axios from 'axios'
+import axios from '../../axios.js'
 
 export default {
   components: {

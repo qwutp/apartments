@@ -1,8 +1,13 @@
 <template>
   <div class="apartment-card" @click="viewApartment">
     <div class="image-container">
-      <img :src="apartment.images && apartment.images[0] ? apartment.images[0].url : '' || '/images/placeholder.jpg'" :alt="apartment.name" class="apartment-image">
-      <div class="rating">⭐ {{ apartment.rating || '4.79' }}</div>
+      <img 
+        :src="getImageUrl()" 
+        :alt="apartment.name" 
+        class="apartment-image"
+        @error="handleImageError"
+      >
+      <div class="rating">⭐ {{ formatRating(apartment.rating) }}</div>
       <button @click.stop="toggleFavorite" class="favorite-btn" :class="{ favorited: isFavorited }">
         ❤️
       </button>
@@ -38,6 +43,43 @@ export default {
     formatPrice(price) {
       if (!price) return '0'
       return new Intl.NumberFormat('ru-RU').format(price)
+    },
+    formatRating(rating) {
+      if (!rating || rating === 0) return '0'
+      return Number(rating).toFixed(2)
+    },
+    getImageUrl() {
+      if (this.apartment.images && this.apartment.images.length > 0) {
+        const img = this.apartment.images[0]
+        // Используем url если есть
+        if (img.url) {
+          return img.url
+        }
+        // Если есть image_path, формируем URL
+        if (img.image_path) {
+          // Если путь уже полный URL, возвращаем его
+          if (img.image_path.startsWith('http://') || img.image_path.startsWith('https://')) {
+            return img.image_path
+          }
+          // Иначе формируем URL относительно storage
+          return `/storage/${img.image_path.replace(/^storage\//, '')}`
+        }
+      }
+      return 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="300"%3E%3Crect fill="%23E0E0E0" width="400" height="300"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%23999" font-family="Arial" font-size="16"%3ENo image%3C/text%3E%3C/svg%3E'
+    },
+    handleImageError(event) {
+      // Предотвращаем бесконечные попытки загрузки
+      if (event.target.dataset.errorHandled === 'true') {
+        event.target.style.display = 'none'
+        return
+      }
+      
+      event.target.dataset.errorHandled = 'true'
+      console.warn('Image failed to load:', event.target.src)
+      
+      // Используем placeholder вместо скрытия
+      const placeholder = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="300"%3E%3Crect fill="%23E0E0E0" width="400" height="300"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%23999" font-family="Arial" font-size="16"%3ENo image%3C/text%3E%3C/svg%3E'
+      event.target.src = placeholder
     }
   }
 }

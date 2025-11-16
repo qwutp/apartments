@@ -1,10 +1,10 @@
 <template>
   <div class="admin-calendar">
     <div class="calendar-toolbar">
-      <select v-model="selectedApartment" class="apartment-select">
+      <select v-model="selectedApartment" @change="onApartmentChange" class="apartment-select">
         <option value="">Выберите апартаменты</option>
         <option v-for="apt in apartments" :key="apt.id" :value="apt.id">
-          {{ apt.name }}
+          {{ apt.name }} ({{ apt.address }})
         </option>
       </select>
       <div class="month-nav">
@@ -34,18 +34,53 @@
 
       <div class="bookings-list" v-if="selectedApartment">
         <h3>Бронирования</h3>
-        <div v-for="booking in bookings" :key="booking.id" class="booking-item">
-          <p><strong>{{ booking.apartment.name }}</strong></p>
-          <p>{{ booking.check_in }} - {{ booking.check_out }}</p>
-          <p>{{ booking.user.name }}</p>
-          <p>{{ booking.user.email }} | {{ booking.user.phone }}</p>
+        <div v-if="loading" class="loading-message">Загрузка...</div>
+        <div v-else-if="filteredBookings.length === 0" class="empty-message">
+          Нет бронирований в этом месяце
         </div>
+        <div v-else>
+          <div v-for="booking in filteredBookings" :key="booking.id" class="booking-item">
+            <div class="booking-header">
+              <strong>{{ booking.apartment?.name || 'Апартаменты' }}</strong>
+              <span :class="['status-badge', booking.status]">
+                {{ booking.status === 'paid' ? 'Оплачено' : 'Ожидает оплаты' }}
+              </span>
+            </div>
+            <div class="booking-info">
+              <div class="info-row">
+                <span class="label">Даты:</span>
+                <span>{{ formatDateDisplay(booking.check_in) }} - {{ formatDateDisplay(booking.check_out) }}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">Арендатор:</span>
+                <span>{{ formatFullName(booking.user) }}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">Телефон:</span>
+                <span>{{ booking.user.phone || '-' }}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">Почта:</span>
+                <span>{{ booking.user.email }}</span>
+              </div>
+              <div class="info-row" v-if="booking.guests">
+                <span class="label">Гостей:</span>
+                <span>{{ booking.guests }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div v-else class="bookings-list empty-state">
+        <p>Выберите апартаменты для просмотра календаря занятости</p>
       </div>
     </div>
   </div>
 </template>
 
 <script>
+import axios from '../../../axios.js'
+
 export default {
   data() {
     return {
@@ -53,7 +88,8 @@ export default {
       selectedApartment: '',
       bookings: [],
       currentDate: new Date(),
-      weekDays: ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
+      weekDays: ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'],
+      loading: false
     }
   },
   computed: {
@@ -70,51 +106,191 @@ export default {
       const lastDay = new Date(year, month + 1, 0)
       const prevLastDay = new Date(year, month, 0)
       
+      // Исправляем день недели (0 = воскресенье, нужно чтобы понедельник был 0)
+      let firstDayOfWeek = firstDay.getDay()
+      if (firstDayOfWeek === 0) firstDayOfWeek = 7 // Воскресенье становится 7
+      firstDayOfWeek = firstDayOfWeek - 1 // Понедельник = 0
+      
       // Previous month days
-      for (let i = firstDay.getDay() - 1; i >= 0; i--) {
+      for (let i = firstDayOfWeek - 1; i >= 0; i--) {
         days.push({
           date: prevLastDay.getDate() - i,
           month: month - 1,
+          year: month === 0 ? year - 1 : year,
           otherMonth: true,
-          status: 'available'
+          status: 'available',
+          fullDate: new Date(month === 0 ? year - 1 : year, month - 1, prevLastDay.getDate() - i)
         })
       }
       
       // Current month days
       for (let i = 1; i <= lastDay.getDate(); i++) {
+        const dayDate = new Date(year, month, i)
         days.push({
           date: i,
           month: month,
+          year: year,
           otherMonth: false,
-          status: this.getDayStatus(new Date(year, month, i))
+          status: this.getDayStatus(dayDate),
+          fullDate: dayDate
         })
       }
       
       // Next month days
-      for (let i = 1; i <= (42 - days.length); i++) {
+      const remainingDays = 42 - days.length
+      for (let i = 1; i <= remainingDays; i++) {
         days.push({
           date: i,
           month: month + 1,
+          year: month === 11 ? year + 1 : year,
           otherMonth: true,
-          status: 'available'
+          status: 'available',
+          fullDate: new Date(month === 11 ? year + 1 : year, month + 1, i)
         })
       }
       
       return days
+    },
+    filteredBookings() {
+      // Фильтруем бронирования для текущего месяца
+      const year = this.currentDate.getFullYear()
+      const month = this.currentDate.getMonth()
+      const startOfMonth = new Date(year, month, 1)
+      const endOfMonth = new Date(year, month + 1, 0)
+      
+      return this.bookings.filter(booking => {
+        const checkIn = new Date(booking.check_in)
+        const checkOut = new Date(booking.check_out)
+        
+        // Показываем бронирования, которые пересекаются с текущим месяцем
+        return (checkIn <= endOfMonth && checkOut >= startOfMonth)
+      }).sort((a, b) => {
+        return new Date(a.check_in) - new Date(b.check_in)
+      })
+    }
+  },
+  watch: {
+    currentDate() {
+      // При смене месяца обновляем отображение календаря
     }
   },
   methods: {
+    async fetchApartments() {
+      try {
+        const response = await axios.get('/api/apartments')
+        this.apartments = response.data.map(apt => ({
+          id: apt.id,
+          name: apt.name,
+          address: apt.address
+        }))
+      } catch (error) {
+        console.error('Error fetching apartments:', error)
+        alert('Ошибка загрузки списка апартаментов')
+      }
+    },
+    
+    async fetchBookings() {
+      if (!this.selectedApartment) return
+      
+      this.loading = true
+      try {
+        const response = await axios.get('/admin/calendar/data', {
+          params: {
+            apartment_id: this.selectedApartment
+          }
+        })
+        this.bookings = response.data
+        console.log('Bookings loaded:', this.bookings)
+      } catch (error) {
+        console.error('Error fetching bookings:', error)
+        // Пробуем альтернативный путь
+        try {
+          const response = await axios.get('/api/bookings/calendar', {
+            params: {
+              apartment_id: this.selectedApartment
+            }
+          })
+          this.bookings = response.data
+        } catch (error2) {
+          alert('Ошибка загрузки данных календаря: ' + (error2.response?.data?.message || error2.message))
+        }
+      } finally {
+        this.loading = false
+      }
+    },
+    
     previousMonth() {
-      this.currentDate.setMonth(this.currentDate.getMonth() - 1)
-      this.currentDate = new Date(this.currentDate)
+      this.currentDate = new Date(this.currentDate.getFullYear(), this.currentDate.getMonth() - 1, 1)
     },
+    
     nextMonth() {
-      this.currentDate.setMonth(this.currentDate.getMonth() + 1)
-      this.currentDate = new Date(this.currentDate)
+      this.currentDate = new Date(this.currentDate.getFullYear(), this.currentDate.getMonth() + 1, 1)
     },
+    
     getDayStatus(date) {
-      // Check if day has bookings
+      if (!this.selectedApartment || this.bookings.length === 0) {
+        return 'available'
+      }
+      
+      // Нормализуем дату (убираем время, оставляем только дату)
+      const normalizedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+      const dateTime = normalizedDate.getTime()
+      
+      // Проверяем, попадает ли дата в какой-либо период бронирования
+      for (const booking of this.bookings) {
+        const checkIn = new Date(booking.check_in)
+        const checkOut = new Date(booking.check_out)
+        
+        // Нормализуем даты бронирования
+        const normalizedCheckIn = new Date(checkIn.getFullYear(), checkIn.getMonth(), checkIn.getDate())
+        const normalizedCheckOut = new Date(checkOut.getFullYear(), checkOut.getMonth(), checkOut.getDate())
+        
+        const checkInTime = normalizedCheckIn.getTime()
+        const checkOutTime = normalizedCheckOut.getTime()
+        
+        // Проверяем, попадает ли дата в период бронирования (включая день выезда)
+        if (dateTime >= checkInTime && dateTime <= checkOutTime) {
+          if (booking.status === 'paid') {
+            return 'booked' // Занято (оплачено)
+          } else if (booking.status === 'pending') {
+            return 'reserved' // Забронировано (ожидает оплаты)
+          }
+        }
+      }
+      
       return 'available'
+    },
+    
+    formatDate(date) {
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
+    },
+    
+    formatFullName(user) {
+      if (user.full_name && user.full_name.trim()) {
+        return user.full_name.trim()
+      }
+      if (user.last_name || user.first_name || user.patronymic) {
+        return [user.last_name, user.first_name, user.patronymic].filter(Boolean).join(' ').trim()
+      }
+      return user.name || 'Не указано'
+    },
+    
+    formatDateDisplay(dateStr) {
+      const date = new Date(dateStr)
+      const day = String(date.getDate()).padStart(2, '0')
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      return `${day}.${month}.${date.getFullYear()}`
+    },
+    
+    onApartmentChange() {
+      if (this.selectedApartment) {
+        this.fetchBookings()
+      } else {
+        this.bookings = []
+      }
     }
   },
   mounted() {
@@ -223,11 +399,39 @@ export default {
 .calendar-day.booked {
   background: #FFE0E0;
   color: #721C24;
+  font-weight: bold;
+  position: relative;
+}
+
+.calendar-day.booked::after {
+  content: '';
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 6px;
+  height: 6px;
+  background: #721C24;
+  border-radius: 50%;
 }
 
 .calendar-day.reserved {
   background: #D1ECF1;
   color: #0C5460;
+  font-weight: bold;
+  position: relative;
+}
+
+.calendar-day.reserved::after {
+  content: '';
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 6px;
+  height: 6px;
+  background: #0C5460;
+  border-radius: 50%;
 }
 
 .bookings-list {
@@ -243,15 +447,86 @@ export default {
 }
 
 .booking-item {
-  padding: 12px;
+  padding: 15px;
   border: 1px solid #E0E0E0;
-  border-radius: 4px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  background: white;
+  transition: box-shadow 0.2s;
+}
+
+.booking-item:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.booking-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #F0F0F0;
+}
+
+.booking-header strong {
+  font-size: 14px;
+  color: #333;
+}
+
+.status-badge {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: bold;
+}
+
+.status-badge.paid {
+  background: #D4EDDA;
+  color: #155724;
+}
+
+.status-badge.pending {
+  background: #D1ECF1;
+  color: #0C5460;
+}
+
+.booking-info {
   font-size: 12px;
 }
 
-.booking-item p {
-  margin: 3px 0;
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  padding: 4px 0;
+}
+
+.info-row .label {
+  color: #666;
+  font-weight: 500;
+}
+
+.info-row span:not(.label) {
+  color: #000;
+  text-align: right;
+}
+
+.loading-message,
+.empty-message {
+  text-align: center;
+  padding: 40px 20px;
+  color: #999;
+  font-size: 14px;
+}
+
+.empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  color: #999;
+  font-size: 14px;
+  text-align: center;
 }
 
 @media (max-width: 1200px) {

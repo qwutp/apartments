@@ -182,15 +182,39 @@
       </div>
 
       <div class="form-section">
-        <h3>Координаты на карте</h3>
-        <div class="form-row">
+        <h3>Расположение на карте</h3>
+        <div class="form-group full-width">
+          <label>Адрес</label>
+          <input 
+            v-model="form.address" 
+            type="text" 
+            placeholder="Введите адрес или выберите точку на карте ниже"
+            @input="searchAddress"
+            class="address-input"
+          >
+          <small class="help-text">Введите адрес для автоматического поиска или кликните на карте для выбора точки</small>
+        </div>
+        <div class="map-selector">
+          <div id="map-selector-container" class="map-container">
+            <div class="map-loading" v-if="!mapSelector">
+              <p>Загрузка карты...</p>
+            </div>
+          </div>
+          <div class="map-coordinates" v-if="form.latitude && form.longitude">
+            <span><strong>Координаты:</strong> {{ form.latitude.toFixed(6) }}, {{ form.longitude.toFixed(6) }}</span>
+          </div>
+          <div class="map-instructions">
+            <p><strong>Инструкция:</strong> Кликните на карте, чтобы установить точку. Перетащите маркер для точной настройки позиции.</p>
+          </div>
+        </div>
+        <div class="form-row" style="margin-top: 10px;">
           <div class="form-group">
             <label>Широта</label>
-            <input v-model.number="form.latitude" type="number" step="0.000001">
+            <input v-model.number="form.latitude" type="number" step="0.000001" readonly>
           </div>
           <div class="form-group">
             <label>Долгота</label>
-            <input v-model.number="form.longitude" type="number" step="0.000001">
+            <input v-model.number="form.longitude" type="number" step="0.000001" readonly>
           </div>
         </div>
       </div>
@@ -202,9 +226,13 @@
           <p>Максимум 10 фотографий</p>
         </div>
         <div v-if="form.images.length > 0" class="images-preview">
-          <div v-for="(img, idx) in form.images" :key="idx" class="image-item">
-            <img :src="img.preview || img.url" :alt="`Image ${idx}`">
-            <button type="button" @click="removeImage(idx)" class="remove-btn">✕</button>
+          <div v-for="(img, idx) in form.images" :key="img.id || `new-${idx}`" class="image-item">
+            <img 
+              :src="getImageSrc(img)" 
+              :alt="`Image ${idx}`"
+              @error="handleImageError"
+            >
+            <button type="button" @click="removeImage(idx)" class="remove-btn" title="Удалить изображение">✕</button>
           </div>
         </div>
       </div>
@@ -278,30 +306,50 @@ export default {
         allows_pets: false,
         allows_smoking: false,
         description: '',
-        latitude: 55.7558,
-        longitude: 37.6173,
+        latitude: null,
+        longitude: null,
         images: []
+      },
+      mapSelector: null,
+      currentMarker: null,
+      addressSearchTimeout: null,
+      deletedImageIds: [] // Массив ID изображений, которые нужно удалить
+    }
+  },
+  
+  watch: {
+    // Сбрасываем список удаленных изображений при переключении режима
+    isEdit(newVal) {
+      if (!newVal) {
+        this.deletedImageIds = []
       }
     }
   },
-  // AdminApartmentForm.vue - ИСПРАВЛЕННЫЙ mounted
-mounted() {
-  console.log('🏠 AdminApartmentForm mounted')
-  console.log('Route name:', this.$route.name)
-  console.log('Route params:', this.$route.params)
   
-  // Определяем режим: создание или редактирование
-  if (this.$route.name === 'admin-apartment-create') {
-    this.isEdit = false
-    this.apartmentId = null
-    console.log('Creating new apartment')
-  } else if (this.$route.name === 'admin-apartment-edit') {
-    this.apartmentId = this.$route.params.id
-    this.isEdit = true
-    console.log('Editing apartment:', this.apartmentId)
-    this.fetchApartment()
-  }
-},
+  mounted() {
+    console.log('🏠 AdminApartmentForm mounted')
+    console.log('Route name:', this.$route.name)
+    console.log('Route params:', this.$route.params)
+    
+    // Определяем режим: создание или редактирование
+    if (this.$route.name === 'admin-apartment-create') {
+      this.isEdit = false
+      this.apartmentId = null
+      console.log('Creating new apartment')
+    } else if (this.$route.name === 'admin-apartment-edit') {
+      this.apartmentId = this.$route.params.id
+      this.isEdit = true
+      console.log('Editing apartment:', this.apartmentId)
+      this.fetchApartment()
+    }
+    
+    // Загружаем карту после монтирования компонента
+    this.$nextTick(() => {
+      setTimeout(() => {
+        this.loadYandexMapSelector()
+      }, 500)
+    })
+  },
 
 methods: {
   goBack() {
@@ -343,17 +391,384 @@ methods: {
         allows_pets: apt.allows_pets || apt.pets_allowed || false,
         allows_smoking: apt.allows_smoking || apt.smoking_allowed || false,
         description: apt.description || '',
-        latitude: apt.latitude || 55.7558,
-        longitude: apt.longitude || 37.6173,
-        images: apt.images ? apt.images.map(img => ({ url: img.url, file: null })) : []
+        latitude: apt.latitude ? parseFloat(apt.latitude) : null,
+        longitude: apt.longitude ? parseFloat(apt.longitude) : null,
+        images: apt.images ? apt.images.map(img => ({ 
+          id: img.id, 
+          url: img.url, 
+          file: null,
+          image_path: img.image_path || null
+        })) : []
       }
       
       console.log('📝 Form filled with data')
+      console.log('Loaded images:', this.form.images)
+      
+      // Сбрасываем список удаленных изображений при загрузке
+      this.deletedImageIds = []
+      
+      // Обновляем карту после загрузки данных
+      this.$nextTick(() => {
+        setTimeout(() => {
+          // Если карта уже инициализирована, обновляем маркер
+          if (this.mapSelector) {
+            if (this.form.latitude && this.form.longitude) {
+              this.addMarker([this.form.latitude, this.form.longitude])
+            } else if (this.form.address) {
+              this.geocodeAddress(this.form.address).then(() => {
+                if (this.form.latitude && this.form.longitude) {
+                  this.addMarker([this.form.latitude, this.form.longitude])
+                }
+              })
+            }
+          } else {
+            // Если карта не инициализирована, загружаем её
+            this.loadYandexMapSelector()
+          }
+        }, 1000)
+      })
     } catch (error) {
       console.error('❌ Error fetching apartment:', error)
       alert('Ошибка загрузки данных апартамента: ' + (error.response?.data?.message || error.message))
       this.$router.push('/admin/apartments')
     }
+  },
+  
+  handleImageUpload(event) {
+    const files = Array.from(event.target.files)
+    
+    // Проверяем лимит
+    if (this.form.images.length + files.length > 10) {
+      alert('Максимум 10 изображений')
+      return
+    }
+    
+    files.forEach(file => {
+      // Проверяем тип файла
+      if (!file.type.startsWith('image/')) {
+        alert(`Файл ${file.name} не является изображением`)
+        return
+      }
+      
+      // Проверяем размер (2MB)
+      if (file.size > 2 * 1024 * 1024) {
+        alert(`Файл ${file.name} слишком большой (максимум 2MB)`)
+        return
+      }
+      
+      // Создаем preview
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        this.form.images.push({
+          file: file,
+          preview: e.target.result,
+          url: null
+        })
+      }
+      reader.readAsDataURL(file)
+    })
+    
+    // Очищаем input для возможности повторной загрузки того же файла
+    event.target.value = ''
+  },
+  
+  removeImage(index) {
+    const image = this.form.images[index]
+    
+    // Если это существующее изображение (есть id), добавляем его ID в список для удаления
+    if (image && image.id) {
+      if (!this.deletedImageIds.includes(image.id)) {
+        this.deletedImageIds.push(image.id)
+        console.log('Added image to delete list:', image.id, 'Total deleted:', this.deletedImageIds)
+      }
+    }
+    
+    // Удаляем изображение из массива
+    this.form.images.splice(index, 1)
+    console.log('Removed image from form, remaining:', this.form.images.length)
+  },
+  
+  getImageSrc(img) {
+    // Для новых изображений используем preview
+    if (img.preview) {
+      return img.preview
+    }
+    // Для существующих изображений используем url
+    if (img.url) {
+      return img.url
+    }
+    // Если есть image_path, формируем URL
+    if (img.image_path) {
+      // Если путь уже полный URL, возвращаем его
+      if (img.image_path.startsWith('http://') || img.image_path.startsWith('https://')) {
+        return img.image_path
+      }
+      // Иначе формируем URL относительно storage
+      return `/storage/${img.image_path.replace(/^storage\//, '')}`
+    }
+    return ''
+  },
+  
+  handleImageError(event) {
+    // Предотвращаем бесконечные попытки загрузки
+    if (event.target.dataset.errorHandled === 'true') {
+      return
+    }
+    
+    event.target.dataset.errorHandled = 'true'
+    console.warn('Image failed to load in form:', event.target.src)
+    
+    // Пробуем альтернативный путь
+    const src = event.target.src
+    if (src.includes('http://') || src.includes('https://')) {
+      try {
+        const url = new URL(src)
+        const path = url.pathname
+        if (path.includes('/storage/')) {
+          // Пробуем относительный путь
+          event.target.src = path
+          return
+        }
+        // Пробуем извлечь путь из полного URL
+        const pathMatch = path.match(/\/storage\/(.+)/)
+        if (pathMatch) {
+          event.target.src = `/storage/${pathMatch[1]}`
+          return
+        }
+      } catch (e) {
+        // Игнорируем ошибку парсинга URL
+      }
+    }
+    
+    // Если путь содержит /storage/, пробуем разные варианты
+    if (src.includes('/storage/')) {
+      const pathMatch = src.match(/\/storage\/(.+)/)
+      if (pathMatch) {
+        // Пробуем без префикса storage
+        event.target.src = `/storage/${pathMatch[1]}`
+        return
+      }
+    }
+    
+    // Если не помогло, показываем placeholder
+    const placeholder = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="150"%3E%3Crect fill="%23E0E0E0" width="200" height="150"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%23999" font-family="Arial" font-size="12"%3EИзображение%3C/text%3E%3C/svg%3E'
+    event.target.src = placeholder
+  },
+  
+  loadYandexMapSelector() {
+    // Проверяем, не загружен ли уже скрипт
+    if (document.querySelector('script[src*="api-maps.yandex.ru"]')) {
+      if (window.ymaps) {
+        window.ymaps.ready(() => {
+          setTimeout(() => this.initYandexMapSelector(), 100)
+        })
+      } else {
+        // Ждем загрузки
+        const checkYmaps = setInterval(() => {
+          if (window.ymaps) {
+            clearInterval(checkYmaps)
+            window.ymaps.ready(() => {
+              setTimeout(() => this.initYandexMapSelector(), 100)
+            })
+          }
+        }, 100)
+        // Таймаут на случай, если карты не загрузятся
+        setTimeout(() => clearInterval(checkYmaps), 5000)
+      }
+      return
+    }
+    
+    // Загружаем Яндекс.Карты без API ключа (работает для базовых функций)
+    const script = document.createElement('script')
+    script.src = 'https://api-maps.yandex.ru/2.1/?lang=ru_RU'
+    script.async = true
+    script.defer = true
+    script.onload = () => {
+      if (window.ymaps) {
+        window.ymaps.ready(() => {
+          setTimeout(() => this.initYandexMapSelector(), 100)
+        })
+      }
+    }
+    script.onerror = () => {
+      console.error('Failed to load Yandex Maps')
+    }
+    document.head.appendChild(script)
+  },
+  
+  initYandexMapSelector() {
+    const mapContainer = document.getElementById('map-selector-container')
+    if (!mapContainer) {
+      console.error('Map selector container not found')
+      setTimeout(() => this.initYandexMapSelector(), 500)
+      return
+    }
+    
+    // Если карта уже инициализирована, не инициализируем снова
+    if (this.mapSelector) {
+      console.log('Map already initialized')
+      return
+    }
+    
+    // Очищаем контейнер перед инициализацией
+    mapContainer.innerHTML = ''
+    
+    if (!window.ymaps) {
+      console.error('Yandex Maps API not loaded, waiting...')
+      setTimeout(() => this.initYandexMapSelector(), 500)
+      return
+    }
+    
+    window.ymaps.ready(() => {
+      // Если есть адрес, но нет координат - геокодируем
+      if (this.form.address && !this.form.latitude) {
+        this.geocodeAddress(this.form.address).then(() => {
+          this.initMapWithMarker(mapContainer)
+        }).catch(() => {
+          // Если геокодирование не удалось, все равно показываем карту
+          this.initMapWithMarker(mapContainer)
+        })
+      } else {
+        this.initMapWithMarker(mapContainer)
+      }
+    })
+  },
+  
+  initMapWithMarker(mapContainer) {
+    if (!window.ymaps || !mapContainer) {
+      console.error('Cannot initialize map: ymaps or container not available')
+      return
+    }
+    
+    const center = this.form.latitude && this.form.longitude 
+      ? [parseFloat(this.form.latitude), parseFloat(this.form.longitude)]
+      : [55.7558, 37.6173] // Москва по умолчанию
+    
+    try {
+      const map = new window.ymaps.Map(mapContainer, {
+        center: center,
+        zoom: this.form.latitude ? 15 : 10,
+        controls: ['zoomControl', 'fullscreenControl', 'geolocationControl']
+      })
+      
+      this.mapSelector = map
+      
+      // Если есть координаты, добавляем маркер
+      if (this.form.latitude && this.form.longitude) {
+        this.addMarker([parseFloat(this.form.latitude), parseFloat(this.form.longitude)])
+      }
+      
+      // Обработчик клика на карте для установки точки
+      map.events.add('click', (e) => {
+        const coords = e.get('coords')
+        console.log('Map clicked at:', coords)
+        this.form.latitude = coords[0]
+        this.form.longitude = coords[1]
+        this.addMarker(coords)
+        this.reverseGeocode(coords)
+      })
+      
+      console.log('Map initialized successfully')
+    } catch (error) {
+      console.error('Error initializing map:', error)
+    }
+  },
+  
+  addMarker(coords) {
+    if (!this.mapSelector || !window.ymaps) {
+      console.error('Cannot add marker: map or ymaps not available')
+      return
+    }
+    
+    // Удаляем предыдущий маркер, если есть
+    if (this.currentMarker) {
+      this.mapSelector.geoObjects.remove(this.currentMarker)
+      this.currentMarker = null
+    }
+    
+    try {
+      // Создаем новый маркер
+      this.currentMarker = new window.ymaps.Placemark(coords, {
+        balloonContent: `
+          <div style="padding: 10px;">
+            <strong>Местоположение апартаментов</strong><br>
+            Координаты: ${coords[0].toFixed(6)}, ${coords[1].toFixed(6)}<br>
+            <small>Перетащите маркер для изменения позиции</small>
+          </div>
+        `,
+        hintContent: 'Перетащите для изменения позиции'
+      }, {
+        preset: 'islands#redDotIcon',
+        draggable: true
+      })
+      
+      this.mapSelector.geoObjects.add(this.currentMarker)
+      this.mapSelector.setCenter(coords, 15, {
+        duration: 300
+      })
+      
+      // Обработчик перетаскивания маркера
+      this.currentMarker.events.add('dragend', () => {
+        const newCoords = this.currentMarker.geometry.getCoordinates()
+        this.form.latitude = newCoords[0]
+        this.form.longitude = newCoords[1]
+        this.reverseGeocode(newCoords)
+      })
+      
+      // Открываем балун при создании маркера
+      this.currentMarker.balloon.open()
+      
+      console.log('Marker added at:', coords)
+    } catch (error) {
+      console.error('Error adding marker:', error)
+    }
+  },
+  
+  geocodeAddress(address) {
+    if (!window.ymaps || !address) return Promise.resolve()
+    
+    return window.ymaps.geocode(address).then(res => {
+      const firstGeoObject = res.geoObjects.get(0)
+      if (firstGeoObject) {
+        const coordinates = firstGeoObject.geometry.getCoordinates()
+        this.form.latitude = coordinates[0]
+        this.form.longitude = coordinates[1]
+        if (this.mapSelector) {
+          this.addMarker(coordinates)
+          this.mapSelector.setCenter(coordinates, 15)
+        }
+      }
+    }).catch(err => {
+      console.error('Geocoding error:', err)
+    })
+  },
+  
+  reverseGeocode(coords) {
+    if (!window.ymaps) return
+    
+    window.ymaps.geocode(coords).then(res => {
+      const firstGeoObject = res.geoObjects.get(0)
+      if (firstGeoObject) {
+        this.form.address = firstGeoObject.getAddressLine()
+      }
+    })
+  },
+  
+  searchAddress() {
+    // Debounce для поиска адреса
+    if (this.addressSearchTimeout) {
+      clearTimeout(this.addressSearchTimeout)
+    }
+    this.addressSearchTimeout = setTimeout(() => {
+      if (this.form.address && this.form.address.length > 3) {
+        this.geocodeAddress(this.form.address).then(() => {
+          // После геокодирования обновляем маркер на карте
+          if (this.mapSelector && this.form.latitude && this.form.longitude) {
+            this.addMarker([this.form.latitude, this.form.longitude])
+          }
+        })
+      }
+    }, 800)
   },
   
   async submitForm() {
@@ -416,13 +831,37 @@ methods: {
       
       const formData = new FormData()
       
-      // Обязательные поля - преобразуем в строки, но убеждаемся что они не пустые
-      formData.append('name', String(this.form.name).trim())
-      formData.append('address', String(this.form.address).trim())
-      formData.append('price_per_night', String(Number(this.form.price_per_night) || 0))
-      formData.append('rooms', String(Number(this.form.rooms) || 1))
-      formData.append('total_area', String(Number(this.form.total_area) || 0))
-      formData.append('max_guests', String(Number(this.form.max_guests) || 1))
+      // Обязательные поля - ВСЕГДА добавляем, даже если пустые (для валидации)
+      const name = String(this.form.name || '').trim()
+      const address = String(this.form.address || '').trim()
+      const price_per_night = this.form.price_per_night !== null && this.form.price_per_night !== undefined 
+        ? String(Number(this.form.price_per_night)) 
+        : '0'
+      const rooms = this.form.rooms !== null && this.form.rooms !== undefined 
+        ? String(Number(this.form.rooms)) 
+        : '1'
+      const total_area = this.form.total_area !== null && this.form.total_area !== undefined 
+        ? String(Number(this.form.total_area)) 
+        : '0'
+      const max_guests = this.form.max_guests !== null && this.form.max_guests !== undefined 
+        ? String(Number(this.form.max_guests)) 
+        : '1'
+      
+      console.log('Form values before append:', {
+        name,
+        address,
+        price_per_night,
+        rooms,
+        total_area,
+        max_guests
+      })
+      
+      formData.append('name', name)
+      formData.append('address', address)
+      formData.append('price_per_night', price_per_night)
+      formData.append('rooms', rooms)
+      formData.append('total_area', total_area)
+      formData.append('max_guests', max_guests)
       
       // Необязательные числовые поля
       if (this.form.kitchen_area) {
@@ -487,21 +926,34 @@ methods: {
       formData.append('allows_pets', this.form.allows_pets ? '1' : '0')
       formData.append('allows_smoking', this.form.allows_smoking ? '1' : '0')
       
-      // Изображения
-      this.form.images.forEach((img, idx) => {
+      // Изображения - используем images[] для Laravel
+      this.form.images.forEach((img) => {
         if (img.file) {
-          formData.append(`images[${idx}]`, img.file)
+          formData.append('images[]', img.file)
         }
       })
+      
+      // Отправляем список ID изображений для удаления (только при редактировании)
+      if (this.isEdit && this.deletedImageIds.length > 0) {
+        this.deletedImageIds.forEach((imageId) => {
+          formData.append('deleted_images[]', imageId)
+        })
+      }
 
       const url = this.isEdit 
         ? `/api/apartments/${this.apartmentId}`
         : '/api/apartments'
       
-      const method = this.isEdit ? 'put' : 'post'
-
       console.log('Step 4: Preparing request...')
-      console.log('📤 Sending request to:', url, 'method:', method)
+      console.log('📤 Sending request to:', url, 'isEdit:', this.isEdit)
+      console.log('Form values:', {
+        name: this.form.name,
+        address: this.form.address,
+        price_per_night: this.form.price_per_night,
+        rooms: this.form.rooms,
+        total_area: this.form.total_area,
+        max_guests: this.form.max_guests
+      })
 
       // Получаем CSRF токен
       const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
@@ -515,14 +967,24 @@ methods: {
       console.log('Step 5: Sending request...')
       const startTime = Date.now()
       
-      const response = await axios[method](url, formData, {
+      // Для PUT используем axios.put, но с правильными заголовками
+      // НЕ устанавливаем Content-Type вручную для FormData - браузер сделает это сам с boundary
+      const requestConfig = {
         headers: { 
-          'Content-Type': 'multipart/form-data',
           'X-CSRF-TOKEN': csrfToken || '',
           'Accept': 'application/json'
         },
-        timeout: 30000 // 30 секунд таймаут
-      })
+        timeout: 60000 // 60 секунд таймаут для загрузки файлов
+      }
+      
+      // Для PUT запросов добавляем _method в FormData (Laravel method spoofing)
+      if (this.isEdit) {
+        formData.append('_method', 'PUT')
+        // Используем POST с _method=PUT
+        var response = await axios.post(url, formData, requestConfig)
+      } else {
+        var response = await axios.post(url, formData, requestConfig)
+      }
 
       const endTime = Date.now()
       console.log(`Step 6: Request completed in ${endTime - startTime}ms`)
@@ -765,14 +1227,27 @@ methods: {
   position: absolute;
   top: -8px;
   right: -8px;
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   background: #FF6B6B;
   color: white;
-  border: none;
+  border: 2px solid white;
   border-radius: 50%;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 16px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  transition: all 0.2s;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.remove-btn:hover {
+  background: #FF5252;
+  transform: scale(1.1);
+  box-shadow: 0 3px 6px rgba(0,0,0,0.3);
 }
 
 .form-actions {
@@ -805,5 +1280,65 @@ methods: {
 .btn-secondary {
   background: #E0E0E0;
   color: #000;
+}
+
+.map-selector {
+  margin-top: 15px;
+}
+
+.map-container {
+  width: 100%;
+  height: 400px;
+  border: 1px solid #E0E0E0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f0f0f0;
+}
+
+.map-coordinates {
+  margin-top: 10px;
+  padding: 8px;
+  background: #F5F5F5;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #666;
+}
+
+.address-input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #E0E0E0;
+  border-radius: 4px;
+  font-family: 'Unbounded', sans-serif;
+  margin-bottom: 10px;
+}
+
+.help-text {
+  display: block;
+  margin-top: 5px;
+  font-size: 12px;
+  color: #666;
+}
+
+.map-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #999;
+  font-size: 14px;
+}
+
+.map-instructions {
+  margin-top: 10px;
+  padding: 10px;
+  background: #F5F5F5;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #666;
+}
+
+.map-instructions p {
+  margin: 0;
 }
 </style>
