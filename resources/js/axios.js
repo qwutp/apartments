@@ -152,7 +152,7 @@ instance.interceptors.response.use(
         // Повторяем запрос с новым токеном (только один раз)
         if (originalRequest && !originalRequest._retry) {
           originalRequest._retry = true
-          const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+        const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
           if (token) {
             originalRequest.headers['X-CSRF-TOKEN'] = token
             return instance.request(originalRequest)

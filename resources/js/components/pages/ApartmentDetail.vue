@@ -159,7 +159,7 @@
         </div>
 
         <div class="right-column">
-          <BookingPanel :apartment="apartment" />
+        <BookingPanel :apartment="apartment" />
         </div>
       </div>
     </template>

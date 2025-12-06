@@ -29,11 +29,11 @@ return [
         ],
     ],
 
-    'yoomoney' => [
-        'url' => env('YOOMONEY_URL', 'https://yoomoney.ru/api/external/kkm/'),
-        'shop_id' => env('YOOMONEY_SHOP_ID'),
-        'scene_id' => env('YOOMONEY_SCENE_ID'),
-        'api_key' => env('YOOMONEY_API_KEY'),
+    'yookassa' => [
+        'shop_id' => env('YOOKASSA_SHOP_ID'),
+        'secret_key' => env('YOOKASSA_SECRET_KEY'),
+        'return_url' => env('YOOKASSA_RETURN_URL'),
+        'webhook_secret' => env('YOOKASSA_WEBHOOK_SECRET'),
     ],
 
 ];

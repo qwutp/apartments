@@ -3,90 +3,144 @@
 namespace App\Http\Controllers;
 
 use App\Models\Booking;
+use App\Services\Payments\YooKassaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use YooKassa\Model\PaymentStatus;
 
 class PaymentController extends Controller
 {
-    public function initiate(Booking $booking)
+    public function __construct(private readonly YooKassaService $payments)
     {
-        if ($booking->user_id !== auth()->id()) {
-            abort(403);
-        }
-
-        // Redirect to Yoomoney payment
-        $yoomoneyUrl = config('services.yoomoney.url');
-        $shopId = config('services.yoomoney.shop_id');
-        $sceneId = config('services.yoomoney.scene_id');
-
-        $params = [
-            'shopId' => $shopId,
-            'sceneId' => $sceneId,
-            'orderNumber' => 'BOOKING-' . $booking->id,
-            'customerNumber' => auth()->id(),
-            'sum' => $booking->total_price,
-            'orderDetails' => 'Booking for ' . $booking->apartment->name,
-            'returnUrl' => route('payment.callback'),
-        ];
-
-        return redirect($yoomoneyUrl . '?' . http_build_query($params));
     }
 
-    public function callback(Request $request)
+    public function createPayment(Request $request, Booking $booking)
     {
-        Log::info('Yoomoney callback received', $request->all());
+        $this->authorizeBooking($booking);
 
-        // Parse booking ID from order number
-        $orderNumber = $request->input('orderNumber');
-        if (!preg_match('/BOOKING-(\d+)/', $orderNumber, $matches)) {
-            return response()->json(['error' => 'Invalid order number'], 400);
+        if ($booking->status === 'paid') {
+            return response()->json([
+                'success' => true,
+                'message' => 'Бронирование уже оплачено.',
+                'booking' => $this->formatBooking($booking),
+            ]);
         }
 
-        $bookingId = $matches[1];
-        $booking = Booking::find($bookingId);
+        $returnUrl = route('payment.return', ['booking' => $booking->id]);
 
-        if (!$booking) {
-            return response()->json(['error' => 'Booking not found'], 404);
-        }
+        try {
+            $payment = $this->payments->createPayment($booking, $returnUrl);
 
-        // Verify payment with Yoomoney (in production, verify the signature)
-        if ($request->input('status') === 'success') {
             $booking->update([
-                'status' => 'paid',
-                'payment_id' => $request->input('paymentId'),
-                'paid_at' => now(),
+                'payment_id' => $payment->getId(),
+                'status' => 'pending',
             ]);
 
-            // Update apartment status if all bookings are confirmed
-            $this->updateApartmentStatus($booking->apartment_id);
+            return response()->json([
+                'success' => true,
+                'payment_id' => $payment->getId(),
+                'confirmation_url' => $payment->getConfirmation()->getConfirmationUrl(),
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('YooKassa payment create error', [
+                'booking_id' => $booking->id,
+                'message' => $e->getMessage(),
+            ]);
 
-            return redirect()->route('bookings.success', $bookingId);
+            return response()->json([
+                'success' => false,
+                'message' => 'Не удалось создать платеж. Попробуйте позже.',
+            ], 500);
         }
-
-        return redirect()->route('bookings.failed', $bookingId);
     }
 
-    public function success(Booking $booking)
+    public function return(Booking $booking, Request $request)
+    {
+        $paymentId = $request->query('paymentId') ?? $booking->payment_id;
+        $status = 'failed';
+
+        if ($paymentId) {
+            try {
+                $payment = $this->payments->getPayment($paymentId);
+                if ($payment && $this->paymentMatchesBooking($payment, $booking) && $payment->getStatus() === PaymentStatus::SUCCEEDED) {
+                    $this->markPaid($booking, $paymentId);
+                    $status = 'success';
+                }
+            } catch (\Throwable $e) {
+                Log::error('YooKassa return error', [
+                    'booking_id' => $booking->id,
+                    'message' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return redirect('/user?tab=active-bookings&payment=' . $status);
+    }
+
+    public function webhook(Request $request)
+    {
+        $data = $request->all();
+        Log::info('YooKassa webhook received', $data);
+
+        $event = $data['event'] ?? null;
+        $object = $data['object'] ?? null;
+
+        if (!$event || !$object) {
+            return response()->json(['status' => 'ignored'], 400);
+        }
+
+        if ($event === 'payment.succeeded' && isset($object['metadata']['booking_id'])) {
+            $booking = Booking::find($object['metadata']['booking_id']);
+            if ($booking) {
+                $this->markPaid($booking, $object['id'] ?? null);
+            }
+        }
+
+        return response()->json(['status' => 'ok']);
+    }
+
+    private function authorizeBooking(Booking $booking): void
     {
         if ($booking->user_id !== auth()->id()) {
             abort(403);
         }
-
-        return view('payments.success', ['booking' => $booking->load('apartment')]);
     }
 
-    public function failed(Booking $booking)
+    private function markPaid(Booking $booking, ?string $paymentId): void
     {
-        if ($booking->user_id !== auth()->id()) {
-            abort(403);
+        if ($booking->status === 'paid') {
+            return;
         }
 
-        return view('payments.failed', ['booking' => $booking]);
+        $booking->update([
+            'status' => 'paid',
+            'payment_id' => $paymentId ?? $booking->payment_id,
+            'paid_at' => now(),
+        ]);
+
+        $this->updateApartmentStatus($booking);
     }
 
-    private function updateApartmentStatus($apartmentId)
+    private function paymentMatchesBooking($payment, Booking $booking): bool
     {
-        $apartment = \App\Models\Apartment::find($apartmentId);
+        $metadata = $payment?->getMetadata();
+        if (!$metadata) {
+            return false;
+        }
+
+        $bookingId = $metadata->offsetExists('booking_id') ? (int) $metadata->offsetGet('booking_id') : null;
+
+        return $bookingId === $booking->id;
+    }
+
+    private function updateApartmentStatus(Booking $booking): void
+    {
+        $apartment = $booking->apartment()->first();
+
+        if (!$apartment) {
+            return;
+        }
+
         $hasActiveBooking = $apartment->bookings()
             ->where('status', 'paid')
             ->where('check_out', '>', now())
@@ -95,5 +149,24 @@ class PaymentController extends Controller
         $apartment->update([
             'status' => $hasActiveBooking ? 'booked' : 'available',
         ]);
+    }
+
+    private function formatBooking(Booking $booking): array
+    {
+        $booking->loadMissing('apartment.images');
+
+        return [
+            'id' => $booking->id,
+            'status' => $booking->status,
+            'total_price' => $booking->total_price,
+            'check_in' => $booking->check_in->toDateString(),
+            'check_out' => $booking->check_out->toDateString(),
+            'apartment' => [
+                'id' => $booking->apartment->id,
+                'name' => $booking->apartment->name,
+                'address' => $booking->apartment->address,
+                'images' => $booking->apartment->images,
+            ],
+        ];
     }
 }

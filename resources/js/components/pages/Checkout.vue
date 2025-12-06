@@ -1,73 +1,71 @@
 <template>
-  <AppLayout>
-    <div class="checkout">
-      <div class="checkout-container">
-        <div class="left">
-          <div class="apartment-info">
-            <img :src="apartment.images && apartment.images[0] ? apartment.images[0].url : ''" :alt="apartment.name">
-            <div>
-              <h3>{{ apartment.name }}</h3>
-              <p>{{ apartment.address }}</p>
-              <p class="price">{{ formatPrice(apartment.price_per_night || apartment.price) }} за ночь</p>
-            </div>
-          </div>
-
-          <div class="booking-dates">
-            <h3>Даты бронирования</h3>
-            <div class="date-fields">
-              <div class="date-field">
-                <label>Дата заезда</label>
-                <input type="date" v-model="checkIn">
-              </div>
-              <div class="date-field">
-                <label>Дата выезда</label>
-                <input type="date" v-model="checkOut">
-              </div>
-            </div>
-            <div class="guests-field">
-              <label>Количество гостей</label>
-              <input type="number" v-model="guests" min="1">
-            </div>
-          </div>
-
-          <div class="personal-info">
-            <h3>Личная информация</h3>
-            <div class="form-row">
-              <input v-model="form.first_name" placeholder="Имя">
-              <input v-model="form.last_name" placeholder="Фамилия">
-              <input v-model="form.patronymic" placeholder="Отчество">
-            </div>
-            <div class="form-row">
-              <input v-model="form.passport_series" placeholder="Серия паспорта">
-              <input v-model="form.passport_number" placeholder="Номер паспорта">
-            </div>
-            <div class="form-row">
-              <input v-model="form.phone" placeholder="Номер телефона">
-              <input v-model="form.email" placeholder="Электронная почта">
-            </div>
+  <div class="checkout">
+    <div class="checkout-container">
+      <div class="left">
+        <div class="apartment-info">
+          <img :src="apartment.images && apartment.images[0] ? apartment.images[0].url : ''" :alt="apartment.name">
+          <div>
+            <h3>{{ apartment.name }}</h3>
+            <p>{{ apartment.address }}</p>
+            <p class="price">{{ formatPrice(apartment.price_per_night || apartment.price) }} за ночь</p>
           </div>
         </div>
 
-        <div class="right">
-          <div class="booking-panel">
-            <div class="total">
-              <span>{{ formatPrice(totalAmount) }} х {{ nightsCount }} ночей</span>
+        <div class="booking-dates">
+          <h3>Даты бронирования</h3>
+          <div class="date-fields">
+            <div class="date-field">
+              <label>Дата заезда</label>
+              <input type="date" v-model="checkIn">
             </div>
-            <button @click="confirmBooking" class="btn btn-primary">Подтвердить бронирование</button>
-            <p class="disclaimer">Подтверждая бронирование Вы соглашайтесь с условиями бронирования</p>
+            <div class="date-field">
+              <label>Дата выезда</label>
+              <input type="date" v-model="checkOut">
+            </div>
+          </div>
+          <div class="guests-field">
+            <label>Количество гостей</label>
+            <input type="number" v-model="guests" min="1">
+          </div>
+        </div>
+
+        <div class="personal-info">
+          <h3>Личная информация</h3>
+          <div class="form-row">
+            <input v-model="form.first_name" placeholder="Имя">
+            <input v-model="form.last_name" placeholder="Фамилия">
+            <input v-model="form.patronymic" placeholder="Отчество">
+          </div>
+          <div class="form-row">
+            <input v-model="form.passport_series" placeholder="Серия паспорта">
+            <input v-model="form.passport_number" placeholder="Номер паспорта">
+          </div>
+          <div class="form-row">
+            <input v-model="form.phone" placeholder="Номер телефона">
+            <input v-model="form.email" placeholder="Электронная почта">
           </div>
         </div>
       </div>
+
+      <div class="right">
+        <div class="booking-panel">
+          <div class="total">
+            <span>{{ formatPrice(totalAmount) }} х {{ nightsCount }} ночей</span>
+          </div>
+          <button @click="confirmBooking" class="btn btn-primary" :disabled="loading">
+            {{ loading ? 'Создаем бронирование...' : 'Перейти к оплате' }}
+          </button>
+          <p class="disclaimer">Подтверждая бронирование Вы соглашайтесь с условиями бронирования</p>
+        </div>
+      </div>
     </div>
-  </AppLayout>
+  </div>
 </template>
 
 <script>
-import AppLayout from '../layouts/AppLayout.vue'
-import axios from 'axios'
+import axios from '../../axios.js'
 
 export default {
-  components: { AppLayout },
   data() {
     return {
       apartment: { images: [] },
@@ -82,7 +80,8 @@ export default {
         passport_number: '',
         phone: '',
         email: ''
-      }
+      },
+      loading: false
     }
   },
   computed: {
@@ -90,7 +89,8 @@ export default {
       if (!this.checkIn || !this.checkOut) return 0
       const start = new Date(this.checkIn)
       const end = new Date(this.checkOut)
-      return Math.ceil((end - start) / (1000 * 60 * 60 * 24))
+      const diff = Math.ceil((end - start) / (1000 * 60 * 60 * 24))
+      return Math.max(diff, 1)
     },
     totalAmount() {
       if (!this.checkIn || !this.checkOut) return 0
@@ -99,16 +99,33 @@ export default {
   },
   methods: {
     formatPrice(price) {
-      if (!price) return '0'
-      return new Intl.NumberFormat('ru-RU').format(price) + ' P'
+      if (!price) return '0 ₽'
+      return new Intl.NumberFormat('ru-RU').format(price) + ' ₽'
     },
     async confirmBooking() {
+      if (!this.checkIn || !this.checkOut) {
+        alert('Пожалуйста, выберите даты заезда и выезда')
+        return
+      }
+
+      if (this.guests < 1) {
+        alert('Количество гостей должно быть не менее 1')
+        return
+      }
+
+      this.loading = true
+
       try {
-        const response = await axios.post('/bookings', {
+        try {
+          await axios.get('/sanctum/csrf-cookie')
+        } catch (csrfError) {
+          console.warn('CSRF cookie error before booking:', csrfError)
+        }
+        const response = await axios.post('/api/bookings', {
           apartment_id: this.apartment.id,
           check_in: this.checkIn,
           check_out: this.checkOut,
-          guests: this.guests,
+          guests: Number(this.guests),
           first_name: this.form.first_name,
           last_name: this.form.last_name,
           patronymic: this.form.patronymic,
@@ -118,11 +135,23 @@ export default {
           email: this.form.email
         })
         
-        // Redirect to payment
-        window.location.href = `/payment/${response.data.booking.id}`
+        if (response.data?.booking?.id) {
+          this.$router.push({ name: 'payment-confirm', params: { id: response.data.booking.id } })
+        } else {
+          alert('Не удалось создать бронирование. Попробуйте позже.')
+        }
       } catch (error) {
         console.error('Booking error:', error)
-        alert('Ошибка при создании бронирования: ' + (error.response?.data?.message || 'Неизвестная ошибка'))
+        if (error.response?.status === 401) {
+          alert('Пожалуйста, войдите в систему, чтобы продолжить бронирование.')
+          this.$router.push('/login')
+          return
+        }
+        const message = error.response?.data?.message || 'Ошибка при создании бронирования'
+        alert(message)
+      }
+      finally {
+        this.loading = false
       }
     }
   },
@@ -131,6 +160,11 @@ export default {
     const checkIn = new URLSearchParams(window.location.search).get('check_in')
     const checkOut = new URLSearchParams(window.location.search).get('check_out')
     const guests = new URLSearchParams(window.location.search).get('guests')
+    if (!apartmentId) {
+      alert('Не удалось определить апартаменты для бронирования')
+      this.$router.push('/')
+      return
+    }
     
     if (checkIn) this.checkIn = checkIn
     if (checkOut) this.checkOut = checkOut
@@ -145,7 +179,7 @@ export default {
     
     // Load user profile data
     try {
-      const profileResponse = await axios.get('/profile')
+      const profileResponse = await axios.get('/api/profile')
       if (profileResponse.data.user) {
         const user = profileResponse.data.user
         this.form = {
@@ -166,6 +200,12 @@ export default {
 </script>
 
 <style scoped>
+.checkout {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 40px 20px 60px;
+}
+
 .checkout-container {
   display: grid;
   grid-template-columns: 1fr 350px;

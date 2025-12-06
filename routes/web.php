@@ -35,36 +35,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [AuthController::class, 'profile'])->name('profile');
     Route::post('/profile', [AuthController::class, 'updateProfile'])->name('profile.update');
     Route::post('/profile/password', [AuthController::class, 'changePassword'])->name('password.change');
-
-    Route::get('/bookings/active', [BookingController::class, 'activeBookings'])->name('bookings.active');
-    Route::get('/bookings/past', [BookingController::class, 'pastBookings'])->name('bookings.past');
-    Route::post('/bookings', [BookingController::class, 'store'])->name('bookings.store');
-    Route::post('/bookings/{booking}/cancel', [BookingController::class, 'cancel'])->name('bookings.cancel');
-
-    Route::post('/apartments/{apartment}/favorite', [FavoriteController::class, 'toggle'])->name('favorites.toggle');
-    Route::get('/favorites', [FavoriteController::class, 'list'])->name('favorites.list');
-
-    Route::get('/reviews/{booking}/create', [ReviewController::class, 'create'])->name('reviews.create');
-    Route::post('/reviews', [ReviewController::class, 'store'])->name('reviews.store');
-
-    Route::get('/payment/{booking}', [PaymentController::class, 'initiate'])->name('payment.initiate');
-    Route::get('/payment/callback', [PaymentController::class, 'callback'])->name('payment.callback');
-    Route::get('/payment/{booking}/success', [PaymentController::class, 'success'])->name('bookings.success');
-
-    // Admin API routes
-    Route::prefix('admin')->group(function () {
-        
-   // Booking Admin API Routes
-    Route::post('/bookings/{booking}/decline', [BookingAdminController::class, 'decline'])->name('admin.bookings.decline');
-    Route::get('/calendar/data', [BookingAdminController::class, 'getCalendarData'])->name('admin.calendar.data');
-    
-    // User Admin API Routes
-    Route::get('/users', [UserAdminController::class, 'index'])->name('admin.users.index');
-    Route::get('/users/{user}', [UserAdminController::class, 'show'])->name('admin.users.show');
-    Route::get('/users/search', [UserAdminController::class, 'search'])->name('admin.users.search');
 });
 
-});
+Route::post('/payment/webhook', [PaymentController::class, 'webhook'])->name('payment.webhook');
+Route::get('/payment/{booking}/return', [PaymentController::class, 'return'])->name('payment.return');
 
 Route::get('/sanctum/csrf-cookie', function() {
     return response()->json([

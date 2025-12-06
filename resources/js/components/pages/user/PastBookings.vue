@@ -1,32 +1,70 @@
 <template>
   <div class="bookings-page">
     <h2>Прошлые бронирования</h2>
-    
-    <div class="empty">
+
+    <div v-if="loading" class="state">Загружаем бронирования...</div>
+    <div v-else-if="bookings.length === 0" class="empty">
       У вас нет прошлых бронирований
+    </div>
+    <div v-else class="bookings-list">
+      <div v-for="booking in bookings" :key="booking.id" class="booking-card">
+        <img v-if="booking.apartment.image" :src="booking.apartment.image" :alt="booking.apartment.name">
+        <div class="booking-info">
+          <h3>{{ booking.apartment.name }}</h3>
+          <p>{{ booking.apartment.address }}</p>
+          <p>С {{ formatDate(booking.check_in) }} по {{ formatDate(booking.check_out) }}</p>
+          <p>{{ booking.guests }} гостей · {{ formatPrice(booking.total_price) }}</p>
+        </div>
+        <div class="actions">
+          <button
+            v-if="booking.can_review"
+            class="btn btn-primary"
+            @click="addReview(booking.id)"
+          >
+            Оставить отзыв
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script>
+import axios from 'axios'
+
 export default {
   name: 'PastBookings',
   data() {
     return {
-      bookings: []
+      bookings: [],
+      loading: false
     }
   },
   mounted() {
     this.fetchBookings()
   },
   methods: {
-    fetchBookings() {
-      // Будет загрузка из API
-      this.bookings = []
+    async fetchBookings() {
+      this.loading = true
+      try {
+        const response = await axios.get('/api/bookings/past')
+        this.bookings = response.data || []
+      } catch (error) {
+        console.error('Ошибка загрузки прошлых бронирований', error)
+        alert('Не удалось загрузить историю бронирований')
+      } finally {
+        this.loading = false
+      }
     },
     addReview(bookingId) {
-      console.log('Add review for booking:', bookingId)
       this.$router.push(`/review?booking=${bookingId}`)
+    },
+    formatDate(date) {
+      return new Date(date).toLocaleDateString('ru-RU')
+    },
+    formatPrice(price) {
+      if (!price) return '0 ₽'
+      return new Intl.NumberFormat('ru-RU').format(price) + ' ₽'
     }
   }
 }
@@ -42,6 +80,7 @@ export default {
   margin-bottom: 30px;
 }
 
+.state,
 .empty {
   text-align: center;
   padding: 60px 20px;
@@ -60,15 +99,16 @@ export default {
   gap: 20px;
   padding: 20px;
   border: 1px solid #E0E0E0;
-  border-radius: 8px;
+  border-radius: 12px;
   align-items: center;
+  background: #fff;
 }
 
 .booking-card img {
   width: 120px;
   height: 120px;
   object-fit: cover;
-  border-radius: 8px;
+  border-radius: 12px;
 }
 
 .booking-info {
@@ -86,23 +126,15 @@ export default {
   font-size: 14px;
 }
 
-.price {
-  color: var(--accent);
-  font-weight: bold;
-  font-size: 16px;
-}
-
-.btn {
+.actions .btn {
   padding: 10px 20px;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
   font-family: 'Unbounded', sans-serif;
   font-size: 14px;
-}
-
-.btn-primary {
   background: var(--accent);
   color: #000;
+  font-weight: 600;
 }
 </style>

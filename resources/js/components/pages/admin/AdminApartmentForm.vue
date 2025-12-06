@@ -236,11 +236,11 @@
         <div v-if="form.images.length > 0" class="images-preview">
           <div v-for="(img, idx) in form.images" :key="img.id || `new-${idx}`" class="image-item">
             <div class="image-wrapper">
-              <img 
+            <img 
                 :src="getImageSrc(img)" 
-                :alt="`Image ${idx}`"
-                @error="handleImageError"
-              >
+              :alt="`Image ${idx}`"
+              @error="handleImageError"
+            >
               <div v-if="img.uploading" class="image-uploading">
                 <div class="spinner"></div>
                 <span>Загрузка...</span>

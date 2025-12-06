@@ -14,11 +14,29 @@
 <body>
     <div id="app">Загрузка Vite...</div>
 
-    @if(file_exists(public_path('hot')))
-        <script type="module" src="http://localhost:3000/@vite/client"></script>
-        <script type="module" src="http://localhost:3000/resources/js/app.js"></script>
+    @php
+        $hotFile = public_path('hot');
+        $manifestPath = public_path('build/manifest.json');
+        $manifest = null;
+        if (file_exists($manifestPath)) {
+            $manifest = json_decode(file_get_contents($manifestPath), true);
+        }
+        $appEntry = $manifest['resources/js/app.js'] ?? null;
+        $cssFiles = $appEntry['css'] ?? [];
+        $jsFile = $appEntry['file'] ?? null;
+    @endphp
+
+    @if(file_exists($hotFile))
+        @vite(['resources/js/app.js'])
+    @elseif($jsFile)
+        @foreach($cssFiles as $css)
+            <link rel="stylesheet" href="{{ asset('build/'.$css) }}">
+        @endforeach
+        <script type="module" src="{{ asset('build/'.$jsFile) }}"></script>
     @else
-        <script type="module" src="/build/assets/app.js"></script>
+        <script>
+            console.error('Vite build files not found. Run "npm run build".');
+        </script>
     @endif
 </body>
 </html>

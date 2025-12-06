@@ -103,7 +103,7 @@ export default {
       const protectedRoutes = ['/user', '/admin']
       const isProtectedRoute = protectedRoutes.some(route => to.path.startsWith(route))
       if (isProtectedRoute) {
-        this.checkRouteAccess()
+      this.checkRouteAccess()
       }
     }
   },
@@ -158,8 +158,8 @@ export default {
       try {
         const response = await axios.get('/api/check-auth')
         if (!response.data?.user) {
-          console.log('🚫 Доступ запрещен, перенаправление на вход')
-          this.$router.push('/login')
+    console.log('🚫 Доступ запрещен, перенаправление на вход')
+    this.$router.push('/login')
         } else {
           // Пользователь авторизован, обновляем состояние
           this.authUser = response.data.user
@@ -246,7 +246,7 @@ async forceAuthCheck() {
     // НЕ очищаем authUser сразу - может быть временная проблема сети
     // Только если это явная ошибка авторизации
     if (error.response?.status === 401 || error.response?.status === 419) {
-      this.authUser = null
+    this.authUser = null
       localStorage.removeItem('authUser')
     }
   }

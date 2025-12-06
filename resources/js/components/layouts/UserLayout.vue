@@ -57,9 +57,53 @@ export default {
       ]
     }
   },
+  watch: {
+    '$route.query.tab'(newTab) {
+      if (this.isValidTab(newTab)) {
+        this.activeTab = newTab
+      }
+    }
+  },
+  created() {
+    const initialTab = this.$route?.query?.tab
+    if (this.isValidTab(initialTab)) {
+      this.activeTab = initialTab
+    }
+  },
+  mounted() {
+    this.handlePaymentStatus()
+  },
   methods: {
+    isValidTab(tab) {
+      return this.navItems.some(item => item.id === tab)
+    },
     setActiveTab(tabId) {
+      if (!this.isValidTab(tabId)) return
       this.activeTab = tabId
+      this.$router.replace({
+        query: {
+          ...this.$route.query,
+          tab: tabId
+        }
+      })
+    },
+    handlePaymentStatus() {
+      const status = this.$route.query?.payment
+      if (!status) return
+
+      if (status === 'success') {
+        alert('Оплата прошла успешно! Ваше бронирование перенесено в активные.')
+      } else if (status === 'failed') {
+        alert('Оплата не была завершена. Попробуйте еще раз.')
+      }
+
+      const { payment, ...rest } = this.$route.query
+      this.$router.replace({
+        query: {
+          ...rest,
+          tab: this.activeTab
+        }
+      })
     }
   }
 }
@@ -130,11 +174,10 @@ export default {
 
 .content {
   flex: 1;
-  background: white;
-  border: 2px solid #E0E0E0;
+  background: var(--primary);
+  border: none;
   border-radius: 12px;
   min-height: 500px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-  padding: 20px;
+  padding: 30px;
 }
 </style>

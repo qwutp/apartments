@@ -6,6 +6,7 @@ import Login from '../components/pages/Login.vue'
 import Register from '../components/pages/Register.vue'
 import ApartmentDetail from '../components/pages/ApartmentDetail.vue'
 import Checkout from '../components/pages/Checkout.vue'
+import PaymentConfirmation from '../components/pages/PaymentConfirmation.vue'
 
 // Layouts
 import UserLayout from '../components/layouts/UserLayout.vue'
@@ -42,6 +43,11 @@ const routes = [
     path: '/checkout',
     name: 'checkout',
     component: Checkout
+  },
+  {
+    path: '/payment/:id/confirm',
+    name: 'payment-confirm',
+    component: PaymentConfirmation
   },
   {
     path: '/user',

@@ -227,49 +227,77 @@ export default {
 
 <style scoped>
 .profile {
-  padding: 20px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
 }
 
 .profile-section {
-  margin-bottom: 40px;
-  padding: 20px;
+  background: white;
+  border-radius: 12px;
+  padding: 30px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   border: 1px solid #E0E0E0;
-  border-radius: 8px;
 }
 
 .profile-section h2 {
-  margin-bottom: 20px;
-  font-size: 16px;
+  margin-bottom: 25px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #000;
+}
+
+.profile-section form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
 .form-group {
-  margin-bottom: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .form-group label {
-  display: block;
-  margin-bottom: 8px;
   font-size: 14px;
   font-weight: 500;
   color: #333;
 }
 
 input {
-  padding: 10px;
+  width: 100%;
+  padding: 12px;
   border: 1px solid #E0E0E0;
-  border-radius: 4px;
+  border-radius: 6px;
   font-family: 'Unbounded', sans-serif;
   font-size: 14px;
   background: white;
+  color: #000;
+  transition: border-color 0.3s;
+}
+
+input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+input::placeholder {
+  color: #999;
 }
 
 .btn {
-  padding: 10px 20px;
+  width: 100%;
+  padding: 12px 24px;
   border: none;
   border-radius: 6px;
   cursor: pointer;
   font-family: 'Unbounded', sans-serif;
   font-size: 14px;
+  font-weight: 500;
+  transition: all 0.3s;
+  margin-top: 10px;
 }
 
 .btn:disabled {
@@ -280,5 +308,11 @@ input {
 .btn-primary {
   background: var(--accent);
   color: #000;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #B8BBE0;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 </style>

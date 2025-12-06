@@ -3,7 +3,7 @@
     <div class="image-container">
       <img 
         :src="getImageUrl()" 
-        :alt="apartment.name"
+        :alt="apartment.name" 
         class="apartment-image"
         @error="handleImageError"
       />

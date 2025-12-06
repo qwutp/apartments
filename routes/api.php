@@ -4,7 +4,9 @@ use App\Http\Controllers\Admin\UserAdminController;
 use App\Http\Controllers\Admin\BookingAdminController;
 use App\Http\Controllers\ApartmentController;
 use App\Http\Controllers\BookingController;
+use App\Http\Controllers\AuthController;
 use App\Http\Controllers\FavoriteController;
+use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ReviewController;
 use Illuminate\Support\Facades\Route;
 
@@ -15,9 +17,12 @@ Route::get('/apartments/search', [ApartmentController::class, 'apiSearch']);
 
 // Protected API routes
 Route::middleware('auth', 'user')->group(function () {
+    Route::get('/profile', [AuthController::class, 'profile']);
     Route::get('/bookings/active', [BookingController::class, 'apiActive']);
     Route::get('/bookings/past', [BookingController::class, 'apiPast']);
     Route::post('/bookings', [BookingController::class, 'apiStore']);
+    Route::get('/bookings/{booking}', [BookingController::class, 'apiShow']);
+    Route::post('/bookings/{booking}/payments', [PaymentController::class, 'createPayment']);
     Route::post('/apartments/{apartment}/favorite', [FavoriteController::class, 'apiToggle']);
     Route::get('/favorites', [FavoriteController::class, 'apiList']);
     Route::get('/reviews/bookings', [ReviewController::class, 'apiGetBookingsForReview']);

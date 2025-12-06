@@ -189,7 +189,7 @@ class ApartmentController extends Controller
                 } else {
                     // Для старых путей из storage
                     $path = ltrim($path, 'storage/');
-                    $url = asset('storage/' . $path);
+                $url = asset('storage/' . $path);
                 }
                 
                 return [
