@@ -80,7 +80,7 @@
 
    Настройки сессий:
    SESSION_DRIVER=file
-   SESSION_LIFETIME=120
+   SESSION_LIFETIME=500
 
 3. Сгенерируйте ключ приложения:
    

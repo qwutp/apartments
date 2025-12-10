@@ -28,7 +28,7 @@ return Application::configure(basePath: dirname(__DIR__))
             \App\Http\Middleware\RefreshSession::class,
         ]);
         
-        // ⭐ ДОБАВЬТЕ ЭТО ДЛЯ ИСКЛЮЧЕНИЯ CSRF ДЛЯ ЯНДЕКС OAuth ⭐
+        // Исключение CSRF для Яндекс OAuth callback
         $middleware->validateCsrfTokens(except: [
             'auth/yandex/callback',
             'yandex/callback',
@@ -36,4 +36,9 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //
-    })->create();
+    })
+    // ⭐ ДОБАВЬТЕ ЭТУ СТРОКУ ЕСЛИ УСТАНАВЛИВАЕТЕ socialiteproviders/yandex ⭐
+    ->withProviders([
+        \SocialiteProviders\Manager\ServiceProvider::class,
+    ])
+    ->create();

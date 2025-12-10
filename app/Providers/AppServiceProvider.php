@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Facades\File;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -22,5 +23,13 @@ class AppServiceProvider extends ServiceProvider
                 }
             };
         });
+    }
+
+    public function boot(): void
+    {
+        // Гарантируем наличие папки для файловых сессий
+        if (config('session.driver') === 'file') {
+            File::ensureDirectoryExists(storage_path('framework/sessions'));
+        }
     }
 }

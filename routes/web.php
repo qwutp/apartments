@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\Auth\YandexController;
 use App\Http\Controllers\ApartmentController;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\FavoriteController;
@@ -25,10 +26,8 @@ Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth');
 
-Route::get('/auth/yandex', [YandexController::class, 'redirectToYandex'])
-    ->name('auth.yandex');
-
-Route::get('/auth/yandex/callback', [YandexController::class, 'handleYandexCallback']);
+Route::get('auth/yandex', [YandexController::class, 'redirectToYandex'])->name('auth.yandex');
+Route::get('auth/yandex/callback', [YandexController::class, 'handleYandexCallback']);
 
 // Public API routes
 Route::get('/api/apartments', [ApartmentController::class, 'apiIndex']);
@@ -80,8 +79,13 @@ Route::get('/sanctum/csrf-cookie', function() {
 });
 
 // Check auth endpoint - должен быть доступен без авторизации
-Route::get('/api/check-auth', function() {
+Route::get('/api/check-auth', function(\Illuminate\Http\Request $request) {
     try {
+        // Продлеваем сессию при каждом обращении с фронта
+        if ($request->hasSession()) {
+            $request->session()->put('_last_activity', now()->timestamp);
+        }
+        
         $user = null;
         if (auth()->check()) {
             $user = [

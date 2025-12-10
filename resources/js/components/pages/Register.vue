@@ -24,6 +24,9 @@
         <button type="button" @click="register" class="btn btn-primary" :disabled="loading">
           {{ loading ? 'Регистрация...' : 'Зарегистрироваться' }}
         </button>
+        <button type="button" @click="registerWithYandex" class="btn btn-warning text-dark">
+          Зарегистрироваться через Яндекс
+        </button>
         
         <p class="auth-link">
           Уже есть аккаунт? <a href="#" @click.prevent="goToLogin">Войдите</a>
@@ -79,6 +82,9 @@ export default {
     
     goToLogin() {
       this.$router.push('/login')
+    },
+    registerWithYandex() {
+      window.location.href = '/auth/yandex'
     }
   }
 }

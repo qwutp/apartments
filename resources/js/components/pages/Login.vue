@@ -16,11 +16,9 @@
         <button type="button" @click="login" class="btn btn-primary" :disabled="loading">
           {{ loading ? 'Вход...' : 'Войти' }}
         </button>
-        <div class="social-auth-links">
-    <a href="{{ route('auth.yandex') }}" class="btn btn-block btn-yandex">
-        <i class="fab fa-yandex mr-2"></i> Войти через Яндекс
-    </a>
-</div>
+        <button type="button" @click="loginWithYandex" class="btn btn-warning text-dark">
+          Войти через Яндекс
+        </button>
         <p class="auth-link">
           Нет аккаунта? <a href="#" @click.prevent="goToRegister">Зарегистрируйтесь</a>
         </p>
@@ -88,6 +86,9 @@ export default {
     
     goToRegister() {
       this.$router.push('/register')
+    },
+    loginWithYandex() {
+      window.location.href = '/auth/yandex'
     }
   },
 }
