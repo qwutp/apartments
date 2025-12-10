@@ -160,3 +160,15 @@ textarea:focus {
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   }
 }
+
+.btn-yandex {
+  background-color: #FFCC00;
+  color: #000;
+  border-color: #FFCC00;
+}
+
+.btn-yandex:hover {
+  background-color: #E6B800;
+  border-color: #E6B800;
+  color: #000;
+}

@@ -25,6 +25,11 @@ Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth');
 
+Route::get('/auth/yandex', [YandexController::class, 'redirectToYandex'])
+    ->name('auth.yandex');
+
+Route::get('/auth/yandex/callback', [YandexController::class, 'handleYandexCallback']);
+
 // Public API routes
 Route::get('/api/apartments', [ApartmentController::class, 'apiIndex']);
 Route::get('/api/apartments/{id}', [ApartmentController::class, 'apiShow']);

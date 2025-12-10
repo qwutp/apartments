@@ -27,6 +27,12 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             \App\Http\Middleware\RefreshSession::class,
         ]);
+        
+        // ⭐ ДОБАВЬТЕ ЭТО ДЛЯ ИСКЛЮЧЕНИЯ CSRF ДЛЯ ЯНДЕКС OAuth ⭐
+        $middleware->validateCsrfTokens(except: [
+            'auth/yandex/callback',
+            'yandex/callback',
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

@@ -29,11 +29,10 @@ return [
         ],
     ],
 
-    'yoomoney' => [
-        'url' => env('YOOMONEY_URL', 'https://yoomoney.ru/api/external/kkm/'),
-        'shop_id' => env('YOOMONEY_SHOP_ID'),
-        'scene_id' => env('YOOMONEY_SCENE_ID'),
-        'api_key' => env('YOOMONEY_API_KEY'),
-    ],
+    'yandex' => [
+    'client_id' => env('YANDEX_CLIENT_ID'),
+    'client_secret' => env('YANDEX_CLIENT_SECRET'),
+    'redirect' => env('YANDEX_REDIRECT_URI'),
+],
 
 ];

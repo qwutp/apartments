@@ -16,7 +16,11 @@
         <button type="button" @click="login" class="btn btn-primary" :disabled="loading">
           {{ loading ? 'Вход...' : 'Войти' }}
         </button>
-        
+        <div class="social-auth-links">
+    <a href="{{ route('auth.yandex') }}" class="btn btn-block btn-yandex">
+        <i class="fab fa-yandex mr-2"></i> Войти через Яндекс
+    </a>
+</div>
         <p class="auth-link">
           Нет аккаунта? <a href="#" @click.prevent="goToRegister">Зарегистрируйтесь</a>
         </p>
