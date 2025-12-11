@@ -1,37 +1,63 @@
 <?php
 
-use App\Http\Controllers\Admin\UserAdminController;
-use App\Http\Controllers\Admin\BookingAdminController;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\ApartmentController;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\FavoriteController;
 use App\Http\Controllers\ReviewController;
-use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\AuthController;
 
-// Public API routes
+/*
+|--------------------------------------------------------------------------
+| API Routes
+|--------------------------------------------------------------------------
+*/
+
+// Публичные маршруты - используем api методы
 Route::get('/apartments', [ApartmentController::class, 'apiIndex']);
-Route::get('/apartments/{id}', [ApartmentController::class, 'apiShow']);
+Route::get('/apartments/{id}', [ApartmentController::class, 'apiShow'])->where('id', '[0-9]+');
 Route::get('/apartments/search', [ApartmentController::class, 'apiSearch']);
 
-// Protected API routes
-Route::middleware('auth', 'user')->group(function () {
-    Route::get('/bookings/active', [BookingController::class, 'apiActive']);
-    Route::get('/bookings/past', [BookingController::class, 'apiPast']);
-    Route::post('/bookings', [BookingController::class, 'apiStore']);
-    Route::post('/apartments/{apartment}/favorite', [FavoriteController::class, 'apiToggle']);
-    Route::get('/favorites', [FavoriteController::class, 'apiList']);
-    Route::get('/reviews/bookings', [ReviewController::class, 'apiGetBookingsForReview']);
-    Route::post('/reviews', [ReviewController::class, 'apiStore']);
+// Аутентификация
+Route::post('/register', [AuthController::class, 'register']);
+Route::post('/login', [AuthController::class, 'login']);
+Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth');
+
+// Получение CSRF токена для Vue
+Route::get('/csrf-cookie', function() {
+    return response()->json(['csrf_token' => csrf_token()]);
 });
 
-// Admin API routes
-Route::middleware('auth', 'admin')->group(function () {
-    Route::get('/users/{user}', [UserAdminController::class, 'show']);
-    Route::get('/users/search', [UserAdminController::class, 'search']);
-    Route::get('/bookings/calendar', [BookingAdminController::class, 'getCalendarData']);
-    Route::post('/bookings/{booking}/decline', [BookingAdminController::class, 'decline']);
-    Route::get('/apartments', [ApartmentController::class, 'apiIndex']);
-    Route::post('/apartments', [ApartmentController::class, 'apiStore']);
-    Route::put('/apartments/{id}', [ApartmentController::class, 'apiUpdate']);
-    Route::delete('/apartments/{id}', [ApartmentController::class, 'apiDestroy']);
+// Защищенные маршруты
+Route::middleware(['auth'])->group(function () {
+    // Пользователь
+    Route::get('/user', function (Request $request) {
+        return response()->json(['user' => $request->user()]);
+    });
+
+    // Бронирования
+    Route::get('/bookings', [BookingController::class, 'index']);
+    Route::post('/bookings', [BookingController::class, 'store']);
+    Route::put('/bookings/{booking}', [BookingController::class, 'update']);
+    Route::delete('/bookings/{booking}', [BookingController::class, 'destroy']);
+
+    // Избранное
+    Route::get('/favorites', [FavoriteController::class, 'apiList']);
+    Route::post('/favorites', [FavoriteController::class, 'store']);
+    Route::delete('/favorites/{favorite}', [FavoriteController::class, 'destroy']);
+
+    // Отзывы
+    Route::post('/reviews', [ReviewController::class, 'store']);
+    Route::put('/reviews/{review}', [ReviewController::class, 'update']);
+    Route::delete('/reviews/{review}', [ReviewController::class, 'destroy']);
+    
+    // Тестовый маршрут для отладки
+    Route::get('/debug/session', function() {
+        return response()->json([
+            'session_id' => session()->getId(),
+            'user_id' => auth()->id(),
+            'authenticated' => auth()->check(),
+        ]);
+    });
 });

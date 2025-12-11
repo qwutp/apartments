@@ -12,14 +12,17 @@
         v-if="!isAdmin"
         @click.stop="toggleFavorite" 
         class="favorite-btn" 
-        :class="{ favorited: isFavorited }"
+        :class="{ favorited: isFavorited, toggling: togglingFavorite }"
+        :disabled="togglingFavorite"
+        :title="isFavorited ? 'Удалить из избранного' : 'Добавить в избранное'"
       >
-        ❤️
+        <span v-if="isFavorited" class="heart-filled">❤️</span>
+        <span v-else class="heart-empty">🤍</span>
       </button>
     </div>
     <div class="apartment-info">
       <div class="apartment-name">{{ apartment.name }}</div>
-      <div class="apartment-price">{{ formatPrice(apartment.price_per_night) }} р <span class="price-period">за ночь</span></div>
+      <div class="apartment-price">{{ formatPrice(apartment.price_per_night) }} р <span class="price-period">в месяц</span></div>
     </div>
   </div>
 </template>
@@ -279,26 +282,53 @@ export default {
   position: absolute;
   top: 10px;
   right: 10px;
-  width: 32px;
-  height: 32px;
-  background: white;
-  border: none;
+  width: 40px;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 2px solid rgba(0, 0, 0, 0.1);
   border-radius: 50%;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
-  transition: all 0.2s;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  font-size: 20px;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  z-index: 10;
 }
 
-.favorite-btn:hover {
-  transform: scale(1.1);
+.favorite-btn:hover:not(:disabled) {
+  transform: scale(1.15);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  background: white;
+}
+
+.favorite-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .favorite-btn.favorited {
-  color: #FF385C;
+  background: rgba(255, 56, 92, 0.1);
+  border-color: #FF385C;
+}
+
+.favorite-btn.favorited .heart-filled {
+  animation: heartBeat 0.3s ease;
+}
+
+.favorite-btn.toggling {
+  animation: pulse 0.5s ease infinite;
+}
+
+@keyframes heartBeat {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.3); }
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
 }
 
 .apartment-info {

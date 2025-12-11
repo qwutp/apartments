@@ -32,9 +32,10 @@ export default {
   },
   computed: {
     filteredApartments() {
-      if (!this.searchParams) {
+      if (!this.searchParams || (!this.searchParams.check_in && !this.searchParams.check_out && !this.searchParams.guests)) {
         return this.apartments
       }
+      // Фильтрация будет происходить на сервере через apiSearch
       return this.apartments
     }
   },
@@ -55,9 +56,32 @@ export default {
       }
     },
     
-    handleSearch(params) {
+    async handleSearch(params) {
       this.searchParams = params
       console.log('Search params:', params)
+      
+      // Если есть параметры поиска, делаем запрос на сервер
+      if (params.check_in || params.check_out || params.guests) {
+        this.loading = true
+        try {
+          const queryParams = new URLSearchParams()
+          if (params.check_in) queryParams.append('check_in', params.check_in)
+          if (params.check_out) queryParams.append('check_out', params.check_out)
+          if (params.guests) queryParams.append('guests', params.guests)
+          
+          const response = await axios.get(`/api/apartments/search?${queryParams.toString()}`)
+          this.apartments = response.data
+          console.log('Search results:', this.apartments)
+        } catch (error) {
+          console.error('Error searching apartments:', error)
+          alert('Ошибка при поиске апартаментов')
+        } finally {
+          this.loading = false
+        }
+      } else {
+        // Если параметров нет, загружаем все апартаменты
+        this.fetchApartments()
+      }
     }
   }
 }

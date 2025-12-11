@@ -71,8 +71,8 @@ class YandexController extends Controller
             // Логируем ошибку
             \Log::error('Yandex OAuth Error: ' . $e->getMessage());
             
-            // Возвращаем с ошибкой
-            return redirect()->route('login')->withErrors([
+            // Возвращаем с ошибкой на страницу логина
+            return redirect('/login')->withErrors([
                 'yandex' => 'Ошибка авторизации через Яндекс. Попробуйте еще раз.'
             ]);
         }

@@ -14,7 +14,7 @@
           <input v-model="form.address" required>
         </div>
         <div class="form-group">
-          <label>Цена за ночь (₽) *</label>
+          <label>Цена в месяц (₽) *</label>
           <input v-model.number="form.price_per_night" type="number" required>
         </div>
       </div>
@@ -207,16 +207,6 @@
             <p><strong>Инструкция:</strong> Кликните на карте, чтобы установить точку. Перетащите маркер для точной настройки позиции.</p>
           </div>
         </div>
-        <div class="form-row" style="margin-top: 10px;">
-          <div class="form-group">
-            <label>Широта</label>
-            <input v-model.number="form.latitude" type="number" step="0.000001" readonly>
-          </div>
-          <div class="form-group">
-            <label>Долгота</label>
-            <input v-model.number="form.longitude" type="number" step="0.000001" readonly>
-          </div>
-        </div>
       </div>
 
       <div class="form-section">
@@ -238,8 +228,9 @@
             <div class="image-wrapper">
               <img 
                 :src="getImageSrc(img)" 
-                :alt="`Image ${idx}`"
+                :alt="`Image ${idx + 1}`"
                 @error="handleImageError"
+                class="preview-image"
               >
               <div v-if="img.uploading" class="image-uploading">
                 <div class="spinner"></div>
@@ -493,23 +484,30 @@ methods: {
           file: file,
           preview: e.target.result,
           url: null,
-          uploading: true
+          image_path: null,
+          uploading: false
         }
+        // Добавляем сразу - Vue обновит DOM
         this.form.images.push(imageObj)
+        console.log('✅ Image preview added:', imageObj)
         
-        // Имитируем загрузку (в реальности это будет происходить при сохранении формы)
-        setTimeout(() => {
-          imageObj.uploading = false
-          loadedCount++
-          this.uploadProgress = Math.round((loadedCount / totalFiles) * 100)
-          
-          if (loadedCount === totalFiles) {
-            this.isUploadingImages = false
-            setTimeout(() => {
-              this.uploadProgress = 0
-            }, 1000)
-          }
-        }, 500 + index * 100) // Небольшая задержка для визуального эффекта
+        loadedCount++
+        this.uploadProgress = Math.round((loadedCount / totalFiles) * 100)
+        
+        if (loadedCount === totalFiles) {
+          this.isUploadingImages = false
+          setTimeout(() => {
+            this.uploadProgress = 0
+          }, 1000)
+        }
+      }
+      reader.onerror = () => {
+        alert(`Ошибка чтения файла ${file.name}`)
+        loadedCount++
+        if (loadedCount === totalFiles) {
+          this.isUploadingImages = false
+          this.uploadProgress = 0
+        }
       }
       reader.readAsDataURL(file)
     })
@@ -520,6 +518,7 @@ methods: {
   
   removeImage(index) {
     const image = this.form.images[index]
+    if (!image) return
     
     // Если это существующее изображение (есть id), добавляем его ID в список для удаления
     if (image && image.id) {
@@ -529,33 +528,44 @@ methods: {
       }
     }
     
-    // Удаляем изображение из массива
+    // Удаляем изображение из массива сразу - Vue автоматически обновит DOM
     this.form.images.splice(index, 1)
     console.log('Removed image from form, remaining:', this.form.images.length)
   },
   
   getImageSrc(img) {
+    if (!img) return ''
+    
     // Для новых изображений используем preview
     if (img.preview) {
       return img.preview
     }
+    
     // Для существующих изображений используем url
     if (img.url) {
       return img.url
     }
+    
     // Если есть image_path, формируем URL
     if (img.image_path) {
       // Если путь уже полный URL, возвращаем его
       if (img.image_path.startsWith('http://') || img.image_path.startsWith('https://')) {
         return img.image_path
       }
+      
+      // Убираем лишние слеши
+      let path = img.image_path.replace(/^\/+/, '')
+      
       // Если путь начинается с images/apartments, используем его напрямую
-      if (img.image_path.startsWith('images/apartments/')) {
-        return `/${img.image_path}`
+      if (path.startsWith('images/apartments/')) {
+        return `/${path}`
       }
+      
       // Для старых путей из storage
-      return `/storage/${img.image_path.replace(/^storage\//, '')}`
+      path = path.replace(/^storage\//, '')
+      return `/storage/${path}`
     }
+    
     return ''
   },
   
@@ -709,13 +719,45 @@ methods: {
       }
       
       // Обработчик клика на карте для установки точки
-      map.events.add('click', (e) => {
-        const coords = e.get('coords')
-        console.log('Map clicked at:', coords)
-        this.form.latitude = coords[0]
-        this.form.longitude = coords[1]
-        this.addMarker(coords)
-        this.reverseGeocode(coords)
+      const clickHandler = (e) => {
+        try {
+          // Закрываем балун если открыт
+          if (this.currentMarker && this.currentMarker.balloon && this.currentMarker.balloon.isOpen()) {
+            this.currentMarker.balloon.close()
+          }
+          
+          // Проверяем, что клик не по маркеру
+          const target = e.get('target')
+          if (target && target.geometry && target.geometry.getType && target.geometry.getType() === 'Point') {
+            // Клик по маркеру - не обрабатываем
+            return
+          }
+          
+          const coords = e.get('coords')
+          console.log('Map clicked at:', coords)
+          this.form.latitude = coords[0]
+          this.form.longitude = coords[1]
+          this.addMarker(coords)
+          this.reverseGeocode(coords)
+        } catch (error) {
+          console.error('Error in map click handler:', error)
+        }
+      }
+      
+      map.events.add('click', clickHandler)
+      
+      // Отключаем клики на балуне, чтобы они не блокировали карту
+      map.events.add('balloonopen', () => {
+        // Закрываем балун автоматически сразу
+        setTimeout(() => {
+          try {
+            if (this.currentMarker && this.currentMarker.balloon && this.currentMarker.balloon.isOpen()) {
+              this.currentMarker.balloon.close()
+            }
+          } catch (error) {
+            console.error('Error closing balloon:', error)
+          }
+        }, 100)
       })
       
       console.log('Map initialized successfully')
@@ -759,14 +801,34 @@ methods: {
       
       // Обработчик перетаскивания маркера
       this.currentMarker.events.add('dragend', () => {
-        const newCoords = this.currentMarker.geometry.getCoordinates()
-        this.form.latitude = newCoords[0]
-        this.form.longitude = newCoords[1]
-        this.reverseGeocode(newCoords)
+        try {
+          const newCoords = this.currentMarker.geometry.getCoordinates()
+          this.form.latitude = newCoords[0]
+          this.form.longitude = newCoords[1]
+          // Обновляем адрес при перемещении маркера
+          this.reverseGeocode(newCoords)
+        } catch (error) {
+          console.error('Error in dragend handler:', error)
+        }
       })
       
-      // Открываем балун при создании маркера
-      this.currentMarker.balloon.open()
+      // Обработчик начала перетаскивания - закрываем балун
+      this.currentMarker.events.add('dragstart', () => {
+        try {
+          if (this.currentMarker && this.currentMarker.balloon && this.currentMarker.balloon.isOpen()) {
+            this.currentMarker.balloon.close()
+          }
+        } catch (error) {
+          console.error('Error in dragstart handler:', error)
+        }
+      })
+      
+      // Обработчик во время перетаскивания - предотвращаем ошибки
+      this.currentMarker.events.add('drag', () => {
+        // Просто игнорируем ошибки во время перетаскивания
+      })
+      
+      // Не открываем балун автоматически - он блокирует клики на карте
       
       console.log('Marker added at:', coords)
     } catch (error) {
@@ -799,8 +861,14 @@ methods: {
     window.ymaps.geocode(coords).then(res => {
       const firstGeoObject = res.geoObjects.get(0)
       if (firstGeoObject) {
-        this.form.address = firstGeoObject.getAddressLine()
+        const address = firstGeoObject.getAddressLine()
+        if (address) {
+          this.form.address = address
+          console.log('Address updated from coordinates:', address)
+        }
       }
+    }).catch(err => {
+      console.error('Reverse geocoding error:', err)
     })
   },
   
@@ -859,7 +927,7 @@ methods: {
         return
       }
       if (!this.form.price_per_night || this.form.price_per_night <= 0) {
-        alert('Пожалуйста, укажите цену за ночь (больше 0)')
+        alert('Пожалуйста, укажите цену в месяц (больше 0)')
         this.loading = false
         return
       }
@@ -1304,29 +1372,36 @@ methods: {
 
 .images-preview {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-  gap: 10px;
-  margin-top: 15px;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 15px;
+  margin-top: 20px;
 }
 
 .image-item {
   position: relative;
-  width: 100px;
-  height: 100px;
+  width: 100%;
+  padding-bottom: 75%; /* Соотношение сторон 4:3 */
+  height: 0;
+  transition: all 0.3s ease;
+  opacity: 1;
+  transform: scale(1);
 }
 
 .image-wrapper {
-  position: relative;
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
 }
 
-.image-item img {
+.image-item img.preview-image {
   width: 100%;
   height: 100%;
   object-fit: cover;
   border-radius: 4px;
   border: 1px solid #E0E0E0;
+  display: block;
 }
 
 .image-uploading {

@@ -8,7 +8,7 @@
             <div>
               <h3>{{ apartment.name }}</h3>
               <p>{{ apartment.address }}</p>
-              <p class="price">{{ formatPrice(apartment.price_per_night || apartment.price) }} за ночь</p>
+              <p class="price">{{ formatPrice(apartment.price_per_night || apartment.price) }} в месяц</p>
             </div>
           </div>
 

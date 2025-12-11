@@ -47,6 +47,10 @@ Route::middleware('auth')->group(function () {
 
     Route::post('/apartments/{apartment}/favorite', [FavoriteController::class, 'toggle'])->name('favorites.toggle');
     Route::get('/favorites', [FavoriteController::class, 'list'])->name('favorites.list');
+    
+    // API маршруты для избранного (для фронтенда)
+    Route::post('/api/apartments/{apartment}/favorite', [FavoriteController::class, 'toggle'])->name('api.favorites.toggle');
+    Route::get('/api/favorites', [FavoriteController::class, 'apiList'])->name('api.favorites.list');
 
     Route::get('/reviews/{booking}/create', [ReviewController::class, 'create'])->name('reviews.create');
     Route::post('/reviews', [ReviewController::class, 'store'])->name('reviews.store');
@@ -108,11 +112,11 @@ Route::get('/api/check-auth', function(\Illuminate\Http\Request $request) {
     }
 });
 
-// Public API routes (no auth required)
+// Public API routes (no auth required) - search должен быть ПЕРЕД {id}
 Route::prefix('api')->group(function () {
-    Route::get('/apartments', [ApartmentController::class, 'apiIndex']);
-    Route::get('/apartments/{id}', [ApartmentController::class, 'apiShow']);
     Route::get('/apartments/search', [ApartmentController::class, 'apiSearch']);
+    Route::get('/apartments', [ApartmentController::class, 'apiIndex']);
+    Route::get('/apartments/{id}', [ApartmentController::class, 'apiShow'])->where('id', '[0-9]+');
 });
 
 Route::get('/admin/apartment/create', function () {

@@ -252,6 +252,13 @@ export default {
       
       this.loading = true
       try {
+        // Обновляем сессию перед запросом
+        try {
+          await axios.get('/sanctum/csrf-cookie')
+        } catch (csrfError) {
+          console.warn('CSRF cookie error:', csrfError)
+        }
+        
         console.log('Fetching apartment:', id)
         const response = await axios.get(`/api/apartments/${id}`)
         this.apartment = response.data
@@ -260,12 +267,19 @@ export default {
         // Загружаем карту после получения данных
         if (this.apartment.latitude && this.apartment.longitude || this.apartment.address) {
           this.$nextTick(() => {
-            this.loadYandexMap()
+            setTimeout(() => {
+              this.loadYandexMap()
+            }, 500)
           })
         }
       } catch (error) {
         console.error('Error fetching apartment:', error)
-        alert('Ошибка загрузки данных апартамента: ' + (error.response?.data?.message || error.message))
+        if (error.response?.status === 401 || error.response?.status === 419) {
+          alert('Сессия истекла. Пожалуйста, войдите в систему заново')
+          this.$router.push('/login')
+        } else {
+          alert('Ошибка загрузки данных апартамента: ' + (error.response?.data?.message || error.message))
+        }
       } finally {
         this.loading = false
       }
@@ -361,7 +375,7 @@ export default {
       if (document.querySelector('script[src*="api-maps.yandex.ru"]')) {
         if (window.ymaps) {
           window.ymaps.ready(() => {
-            this.initYandexMap()
+            setTimeout(() => this.initYandexMap(), 300)
           })
         } else {
           // Ждем загрузки
@@ -369,10 +383,12 @@ export default {
             if (window.ymaps) {
               clearInterval(checkYmaps)
               window.ymaps.ready(() => {
-                this.initYandexMap()
+                setTimeout(() => this.initYandexMap(), 300)
               })
             }
           }, 100)
+          // Таймаут на случай, если карты не загрузятся
+          setTimeout(() => clearInterval(checkYmaps), 10000)
         }
         return
       }
@@ -381,62 +397,100 @@ export default {
       const script = document.createElement('script')
       script.src = 'https://api-maps.yandex.ru/2.1/?lang=ru_RU'
       script.async = true
+      script.defer = true
       script.onload = () => {
-        window.ymaps.ready(() => {
-          this.initYandexMap()
-        })
+        if (window.ymaps) {
+          window.ymaps.ready(() => {
+            setTimeout(() => this.initYandexMap(), 300)
+          })
+        }
+      }
+      script.onerror = () => {
+        console.error('Failed to load Yandex Maps')
       }
       document.head.appendChild(script)
     },
     initYandexMap() {
       const mapContainer = document.getElementById('map-container')
       if (!mapContainer) {
-        console.error('Map container not found')
+        console.error('Map container not found, retrying...')
+        setTimeout(() => this.initYandexMap(), 500)
         return
       }
       
-      // Если есть координаты, используем их
-      if (this.apartment.latitude && this.apartment.longitude) {
-        const lat = parseFloat(this.apartment.latitude)
-        const lon = parseFloat(this.apartment.longitude)
-        
-        window.ymaps.ready(() => {
-          const map = new window.ymaps.Map(mapContainer, {
-            center: [lat, lon],
-            zoom: 15,
-            controls: ['zoomControl', 'fullscreenControl']
-          })
+      if (!window.ymaps) {
+        console.error('Yandex Maps API not loaded, retrying...')
+        setTimeout(() => this.initYandexMap(), 500)
+        return
+      }
+      
+      // Очищаем контейнер перед инициализацией
+      mapContainer.innerHTML = ''
+      
+      try {
+        // Если есть координаты, используем их
+        if (this.apartment.latitude && this.apartment.longitude) {
+          const lat = parseFloat(this.apartment.latitude)
+          const lon = parseFloat(this.apartment.longitude)
           
-          const marker = new window.ymaps.Placemark([lat, lon], {
-            balloonContent: `<strong>${this.apartment.name}</strong><br>${this.apartment.address}`,
-            hintContent: this.apartment.address || this.apartment.name
-          }, {
-            preset: 'islands#redDotIcon'
-          })
+          if (isNaN(lat) || isNaN(lon)) {
+            console.error('Invalid coordinates:', lat, lon)
+            if (this.apartment.address) {
+              this.geocodeAddress(this.apartment.address)
+              return
+            }
+          }
           
-          map.geoObjects.add(marker)
-          this.yandexMap = map
-          
-          // Открываем балун с информацией
-          marker.balloon.open()
-        })
-      } else if (this.apartment.address) {
-        // Если нет координат, но есть адрес - геокодируем
-        this.geocodeAddress(this.apartment.address)
-      } else {
-        // Если ничего нет - показываем карту Москвы
-        window.ymaps.ready(() => {
-          const map = new window.ymaps.Map(mapContainer, {
-            center: [55.7558, 37.6173],
-            zoom: 10,
-            controls: ['zoomControl', 'fullscreenControl']
+          window.ymaps.ready(() => {
+            try {
+              const map = new window.ymaps.Map(mapContainer, {
+                center: [lat, lon],
+                zoom: 15,
+                controls: ['zoomControl', 'fullscreenControl']
+              })
+              
+              const marker = new window.ymaps.Placemark([lat, lon], {
+                balloonContent: `<strong>${this.apartment.name || 'Апартаменты'}</strong><br>${this.apartment.address || ''}`,
+                hintContent: this.apartment.address || this.apartment.name || 'Местоположение'
+              }, {
+                preset: 'islands#redDotIcon'
+              })
+              
+              map.geoObjects.add(marker)
+              this.yandexMap = map
+              console.log('Map initialized with coordinates')
+            } catch (error) {
+              console.error('Error creating map:', error)
+            }
           })
-          this.yandexMap = map
-        })
+        } else if (this.apartment.address) {
+          // Если нет координат, но есть адрес - геокодируем
+          this.geocodeAddress(this.apartment.address)
+        } else {
+          // Если ничего нет - показываем карту Москвы
+          window.ymaps.ready(() => {
+            try {
+              const map = new window.ymaps.Map(mapContainer, {
+                center: [55.7558, 37.6173],
+                zoom: 10,
+                controls: ['zoomControl', 'fullscreenControl']
+              })
+              this.yandexMap = map
+              console.log('Map initialized with default center')
+            } catch (error) {
+              console.error('Error creating default map:', error)
+            }
+          })
+        }
+      } catch (error) {
+        console.error('Error in initYandexMap:', error)
       }
     },
     geocodeAddress(address) {
-      if (!window.ymaps || !address) return
+      if (!window.ymaps || !address) {
+        console.warn('Cannot geocode: ymaps or address not available')
+        return
+      }
       
       window.ymaps.geocode(address).then(res => {
         const firstGeoObject = res.geoObjects.get(0)
@@ -446,26 +500,38 @@ export default {
           this.apartment.longitude = coordinates[1]
           
           const mapContainer = document.getElementById('map-container')
-          if (!mapContainer) return
+          if (!mapContainer) {
+            console.error('Map container not found for geocoded address')
+            return
+          }
+          
+          // Очищаем контейнер
+          mapContainer.innerHTML = ''
           
           window.ymaps.ready(() => {
-            const map = new window.ymaps.Map(mapContainer, {
-              center: coordinates,
-              zoom: 15,
-              controls: ['zoomControl', 'fullscreenControl']
-            })
-            
-            const marker = new window.ymaps.Placemark(coordinates, {
-              balloonContent: `<strong>${this.apartment.name}</strong><br>${address}`,
-              hintContent: address
-            }, {
-              preset: 'islands#redDotIcon'
-            })
-            
-            map.geoObjects.add(marker)
-            this.yandexMap = map
-            marker.balloon.open()
+            try {
+              const map = new window.ymaps.Map(mapContainer, {
+                center: coordinates,
+                zoom: 15,
+                controls: ['zoomControl', 'fullscreenControl']
+              })
+              
+              const marker = new window.ymaps.Placemark(coordinates, {
+                balloonContent: `<strong>${this.apartment.name || 'Апартаменты'}</strong><br>${address}`,
+                hintContent: address
+              }, {
+                preset: 'islands#redDotIcon'
+              })
+              
+              map.geoObjects.add(marker)
+              this.yandexMap = map
+              console.log('Map initialized from geocoded address')
+            } catch (error) {
+              console.error('Error creating map from geocoded address:', error)
+            }
           })
+        } else {
+          console.warn('No geocoding results for address:', address)
         }
       }).catch(err => {
         console.error('Geocoding error:', err)
@@ -582,7 +648,10 @@ export default {
 }
 
 .info-section {
+  margin-top: 20px;
   margin-bottom: 30px;
+  position: relative;
+  z-index: 1;
 }
 
 .rating-block {
@@ -591,6 +660,10 @@ export default {
   gap: 15px;
   font-size: 14px;
   margin-bottom: 20px;
+  padding: 10px 0;
+  background: white;
+  position: relative;
+  z-index: 2;
 }
 
 .rating {
@@ -680,13 +753,7 @@ export default {
 }
 
 .map::before {
-  content: 'Загрузка карты...';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  color: #999;
-  z-index: 1;
+  content: '';
 }
 
 .loading {

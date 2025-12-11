@@ -160,6 +160,13 @@ export default {
 .btn-primary {
   background: var(--accent);
   color: #000;
+  margin-bottom: 10px;
+}
+
+.btn-warning {
+  background: #FFCC00;
+  color: #000;
+  margin-bottom: 10px;
 }
 
 .auth-link {

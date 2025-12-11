@@ -67,10 +67,13 @@ export default {
   computed: {
     totalAmount() {
       if (!this.checkInDate || !this.checkOutDate) return 0
+      // Расчет по месяцам аренды
       const start = new Date(this.checkInDate)
       const end = new Date(this.checkOutDate)
-      const nights = Math.ceil((end - start) / (1000 * 60 * 60 * 24))
-      return nights * (this.apartment.price_per_night || this.apartment.price || 0)
+      const days = Math.ceil((end - start) / (1000 * 60 * 60 * 24))
+      // Если аренда меньше месяца, считаем пропорционально
+      const months = days / 30
+      return Math.ceil(months * (this.apartment.price_per_night || this.apartment.price || 0))
     },
     minDate() {
       const today = new Date()

@@ -19,6 +19,10 @@ async function ensureCSRFToken() {
     return token
   }
   
+  axios.get('/csrf-cookie').then(() => {
+    // Теперь можно делать запросы
+});
+
   // Если нет в meta, получаем через cookie
   try {
     // Используем обычный fetch чтобы избежать рекурсии

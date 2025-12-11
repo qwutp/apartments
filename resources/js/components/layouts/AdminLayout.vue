@@ -7,7 +7,7 @@
       <button @click="$router.push('/')" class="btn btn-primary">На главную</button>
     </div>
     <div v-else class="admin-container">
-      <div class="admin-header">
+      <div v-if="!isFormPage" class="admin-header">
         <h1>Панель администратора</h1>
         <nav class="admin-tabs">
           <router-link 
@@ -22,7 +22,7 @@
         </nav>
       </div>
       
-      <div class="admin-content-wrapper">
+      <div class="admin-content-wrapper" :class="{ 'no-header': isFormPage }">
         <router-view></router-view>
       </div>
     </div>
@@ -45,6 +45,11 @@ export default {
       authUser: null,
       loading: true,
       hasAccess: false
+    }
+  },
+  computed: {
+    isFormPage() {
+      return this.$route.name === 'admin-apartment-create' || this.$route.name === 'admin-apartment-edit'
     }
   },
   async mounted() {
@@ -156,6 +161,10 @@ export default {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   min-height: 500px;
   padding: 30px;
+}
+
+.admin-content-wrapper.no-header {
+  margin-top: 0;
 }
 
 .loading, .access-denied {

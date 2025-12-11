@@ -8,7 +8,8 @@ use Laravel\Socialite\Two\User;
 
 class YandexProvider extends AbstractProvider implements ProviderInterface
 {
-    protected $scopes = ['login:email', 'login:info', 'login:avatar'];
+    // Убираем неправильные scopes - Яндекс требует только базовые права
+    protected $scopes = [];
     
     protected function getAuthUrl($state)
     {

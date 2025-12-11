@@ -25,7 +25,7 @@
           <tr v-for="apartment in filteredApartments" :key="apartment.id">
             <td>{{ apartment.name }}</td>
             <td>{{ apartment.address }}</td>
-            <td>{{ formatPrice(apartment.price_per_night) }} Р/сут.</td>
+            <td>{{ formatPrice(apartment.price_per_night) }} Р/мес.</td>
             <td>
               <span :class="['status', apartment.status]">
                 {{ getStatusText(apartment.status) }}

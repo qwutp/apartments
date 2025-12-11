@@ -15,30 +15,44 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'admin' => \App\Http\Middleware\IsAdmin::class,
             'user' => \App\Http\Middleware\IsUser::class,
+            'cors' => \App\Http\Middleware\Cors::class, // Кастомный CORS
         ]);
         
-        // Включаем сессию для API маршрутов (нужно для Sanctum)
+        // Для API - добавляем кастомный CORS и сессии ПЕРВЫМИ
         $middleware->api(prepend: [
+            \App\Http\Middleware\Cors::class,
             \Illuminate\Session\Middleware\StartSession::class,
-            \App\Http\Middleware\RefreshSession::class,
+            \Illuminate\View\Middleware\ShareErrorsFromSession::class,
+            \Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse::class,
         ]);
         
-        // Также добавляем для web маршрутов
+        // Для web маршрутов
         $middleware->web(append: [
-            \App\Http\Middleware\RefreshSession::class,
+            \Illuminate\Session\Middleware\AuthenticateSession::class,
         ]);
         
-        // Исключение CSRF для Яндекс OAuth callback
+        // CSRF исключения
         $middleware->validateCsrfTokens(except: [
             'auth/yandex/callback',
             'yandex/callback',
+            'api/login',
+            'api/logout',
+            'api/register',
+            'api/sanctum/csrf-cookie',
+            'api/*', // Можно отключить для всех API если нужно
+        ]);
+        
+        // Добавляем CORS в API группу
+        $middleware->appendToGroup('api', [
+            \App\Http\Middleware\Cors::class,
+        ]);
+        
+        // Добавляем CORS в web группу (для маршрутов которые может вызывать Vue)
+        $middleware->appendToGroup('web', [
+            \App\Http\Middleware\Cors::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //
     })
-    // ⭐ ДОБАВЬТЕ ЭТУ СТРОКУ ЕСЛИ УСТАНАВЛИВАЕТЕ socialiteproviders/yandex ⭐
-    ->withProviders([
-        \SocialiteProviders\Manager\ServiceProvider::class,
-    ])
     ->create();

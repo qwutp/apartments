@@ -82,18 +82,37 @@ class ApartmentController extends Controller
 
     public function apiShow($id)
     {
-        $apartment = Apartment::with('images', 'reviews.user', 'owner')->findOrFail($id);
-        return response()->json($this->formatApartment($apartment));
+        try {
+            // Обновляем сессию
+            if (request()->hasSession()) {
+                request()->session()->put('_last_activity', now()->timestamp);
+            }
+            
+            $apartment = Apartment::with('images', 'reviews.user', 'owner')->findOrFail($id);
+            return response()->json($this->formatApartment($apartment))
+                ->header('X-CSRF-TOKEN', csrf_token());
+        } catch (\Exception $e) {
+            \Log::error('Apartment apiShow error: ' . $e->getMessage());
+            return response()->json([
+                'error' => 'Apartment not found',
+                'message' => $e->getMessage()
+            ], 404);
+        }
     }
 
     public function apiSearch(Request $request)
     {
         $query = Apartment::query();
+        
+        // Фильтруем только доступные апартаменты
+        $query->where('status', 'available');
 
         if ($request->has('search')) {
             $search = $request->input('search');
-            $query->where('name', 'like', "%{$search}%")
-                ->orWhere('address', 'like', "%{$search}%");
+            $query->where(function($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('address', 'like', "%{$search}%");
+            });
         }
 
         if ($request->has('check_in') && $request->has('check_out')) {
@@ -141,12 +160,12 @@ class ApartmentController extends Controller
             'living_area' => $apartment->living_area,
             'floor' => $apartment->floor,
             'max_guests' => $apartment->max_guests,
-            'balcony' => $apartment->balcony,
-            'furniture' => $apartment->furniture, // Теперь это строка
-            'appliances' => $apartment->appliances, // Теперь это строка
+            'balcony' => $this->translateBalcony($apartment->balcony),
+            'furniture' => $this->translateFurniture($apartment->furniture),
+            'appliances' => $this->translateAppliances($apartment->appliances),
             'internet' => $apartment->has_internet,
             'has_internet' => $apartment->has_internet,
-            'bathroom' => $apartment->bathroom,
+            'bathroom' => $this->translateBathroom($apartment->bathroom),
             'repair' => $apartment->renovation,
             'renovation' => $apartment->renovation,
             'deposit' => $apartment->deposit,
@@ -241,5 +260,65 @@ class ApartmentController extends Controller
             'multiple' => 'несколько',
         ];
         return $translations[$value] ?? $value;
+    }
+
+    private function translateFurniture($value)
+    {
+        if (empty($value)) return 'нет';
+        
+        // Если это строка с запятыми, разбиваем и переводим
+        if (is_string($value)) {
+            $items = array_map('trim', explode(',', $value));
+            $translations = [
+                'bed' => 'кровать',
+                'wardrobe' => 'шкаф',
+                'sofa' => 'диван',
+                'table' => 'стол',
+                'chairs' => 'стулья',
+                'dresser' => 'комод',
+                'nightstand' => 'тумбочка',
+                'bookshelf' => 'книжная полка',
+                'tv_stand' => 'ТВ-тумба',
+                'armchair' => 'кресло'
+            ];
+            
+            $translated = array_map(function($item) use ($translations) {
+                return $translations[trim($item)] ?? trim($item);
+            }, $items);
+            
+            return implode(', ', $translated);
+        }
+        
+        return $value;
+    }
+
+    private function translateAppliances($value)
+    {
+        if (empty($value)) return 'нет';
+        
+        // Если это строка с запятыми, разбиваем и переводим
+        if (is_string($value)) {
+            $items = array_map('trim', explode(',', $value));
+            $translations = [
+                'refrigerator' => 'холодильник',
+                'stove' => 'плита',
+                'oven' => 'духовка',
+                'microwave' => 'микроволновка',
+                'dishwasher' => 'посудомойка',
+                'washing_machine' => 'стиральная машина',
+                'tv' => 'телевизор',
+                'air_conditioner' => 'кондиционер',
+                'water_heater' => 'водонагреватель',
+                'coffee_maker' => 'кофемашина'
+            ];
+            
+            $translated = array_map(function($item) use ($translations) {
+                return $translations[trim($item)] ?? trim($item);
+            }, $items);
+            
+            return implode(', ', $translated);
+        }
+        
+        return $value;
     }
 }
